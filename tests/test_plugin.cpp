@@ -1,3 +1,5 @@
+#include "dsp/EngineParams.h"
+#include "plugin/ParamBridge.h"
 #include "plugin/ParameterIds.h"
 #include "plugin/PluginProcessor.h"
 #include "util/SignalGen.h"
@@ -67,6 +69,39 @@ std::vector<float> renderMono(wg::plugin::PluginProcessor& p,
 }
 
 } // namespace
+
+TEST_CASE("autoGain Off/Static/Dynamic indices via ParameterAttachment + ParamBridge",
+          "[plugin][autoGain][mapping]")
+{
+    wg::plugin::PluginProcessor proc;
+    auto* choice = dynamic_cast<juce::AudioParameterChoice*>(
+        proc.getAPVTS().getParameter(wg::plugin::param::autoGain));
+    REQUIRE(choice != nullptr);
+    REQUIRE(choice->choices.size() == 3);
+
+    wg::plugin::ParamBridge bridge(proc.getAPVTS());
+
+    // Mimic SegmentedControl: ParameterAttachment wants denormalised choice indices.
+    juce::ParameterAttachment attach(*choice, [](float) {}, nullptr);
+    const wg::dsp::AutoGainMode expected[] = {
+        wg::dsp::AutoGainMode::Off,
+        wg::dsp::AutoGainMode::Static,
+        wg::dsp::AutoGainMode::Dynamic,
+    };
+
+    for (int i = 0; i < 3; ++i)
+    {
+        attach.setValueAsCompleteGesture(static_cast<float>(i));
+        REQUIRE(choice->getIndex() == i);
+        REQUIRE(static_cast<int>(std::lround(proc.getAPVTS().getRawParameterValue(wg::plugin::param::autoGain)->load()))
+                == i);
+        REQUIRE(bridge.snapshot().autoGain == expected[i]);
+    }
+
+    // Guard against the old double-normalise bug: normalised Dynamic (1.0) must not stick as Static.
+    attach.setValueAsCompleteGesture(choice->convertTo0to1(2.0f)); // wrong API usage
+    REQUIRE(choice->getIndex() != 2);
+}
 
 TEST_CASE("T15 state get/set/get and factory presets", "[T15][plugin][state]")
 {

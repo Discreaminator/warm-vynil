@@ -75,7 +75,8 @@ void SegmentedControl::mouseUp(const juce::MouseEvent& e)
     if (n <= 0)
         return;
     const int i = juce::jlimit(0, n - 1, (int) (e.position.x / (getWidth() / (float) n)));
-    attachment_->setValueAsCompleteGesture(param_.convertTo0to1((float) i));
+    // ParameterAttachment expects a denormalised value (choice index), then normalises internally.
+    attachment_->setValueAsCompleteGesture(static_cast<float>(i));
 }
 
 } // namespace wg::ui

@@ -128,8 +128,9 @@ void AdvancedPanel::mouseUp(const juce::MouseEvent& e)
         idx = 1;
     if (idx < 0 || tubeAttach_ == nullptr)
         return;
-    if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(processor_.getAPVTS().getParameter(wg::plugin::param::tubeModel)))
-        tubeAttach_->setValueAsCompleteGesture(p->convertTo0to1((float) idx));
+    if (dynamic_cast<juce::AudioParameterChoice*>(processor_.getAPVTS().getParameter(wg::plugin::param::tubeModel)) != nullptr)
+        // ParameterAttachment expects a denormalised choice index (not normalised 0–1).
+        tubeAttach_->setValueAsCompleteGesture(static_cast<float>(idx));
 }
 
 void AdvancedPanel::resized()

@@ -15,9 +15,9 @@ constexpr double kTubeKDynAtFull = 0.14;
 // Extra warmth bias on top of user riaaTilt (dB at Amount=1).
 constexpr double kTiltBiasDb = 0.35;
 constexpr double kTiltUserScale = 1.25;
-// Darker top: pull cart / xfmr corners slightly below user targets.
-constexpr double kCartFrDark = 0.78;
-constexpr double kXfmrFcDark = 0.88;
+// Darker top: pull cart / xfmr corners below user targets (~7% more aggressive vs prior 0.78/0.88).
+constexpr double kCartFrDark = 0.725;
+constexpr double kXfmrFcDark = 0.818;
 constexpr double kCartQBoost = 1.18;
 } // namespace
 
