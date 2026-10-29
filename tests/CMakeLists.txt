@@ -1,5 +1,6 @@
 add_executable(wg_tests
     test_smoke.cpp
+    test_dsp_primitives.cpp
 )
 
 target_link_libraries(wg_tests PRIVATE
