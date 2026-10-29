@@ -15,9 +15,9 @@ inline constexpr double kDcBlockHz = 5.0;
 inline constexpr double kXfmrLfSatHz = 25.0;
 inline constexpr double kXfmrHpfHz = 6.0;
 
-// --- Tilt mismatch shelves (SPEC §4.3) ---
-inline constexpr double kTiltLowShelfHz = 250.0;
-inline constexpr double kTiltHighShelfHz = 4000.0;
+// --- Tilt mismatch shelves (SPEC §4.3; HS nudged down for darker air / retained upper-mid) ---
+inline constexpr double kTiltLowShelfHz = 280.0;
+inline constexpr double kTiltHighShelfHz = 3200.0;
 
 // --- Parameter coefficient update grid (SPEC §8.3) ---
 inline constexpr int kCoeffUpdateGrid = 32;
@@ -39,9 +39,9 @@ inline constexpr double kAutoGainGateLufs = -50.0;
 inline constexpr double kEngineBypassOff = 0.003;
 inline constexpr double kEngineBypassOn = 0.007;
 
-// --- Tracing polynomial (SPEC §4.3) ---
-inline constexpr double kTracingC2Scale = 0.15;
-inline constexpr double kTracingC3Scale = -0.03;
+// --- Tracing polynomial (SPEC §4.3; slight C2 bump for richer even harmonics) ---
+inline constexpr double kTracingC2Scale = 0.18;
+inline constexpr double kTracingC3Scale = -0.028;
 
 // --- Numerical epsilons ---
 inline constexpr double kAdaaDeltaEps = 1.0e-6;

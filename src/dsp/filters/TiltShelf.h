@@ -62,7 +62,7 @@ private:
 
 } // namespace detail
 
-/** RIAA mismatch tilt: LS 250 Hz +t/2 dB, HS 4 kHz −t/2 dB (SPEC §4.3). */
+/** RIAA mismatch tilt: LS +t/2 dB, HS −t/2 dB (corners in Constants.h). */
 class TiltShelf
 {
 public:
