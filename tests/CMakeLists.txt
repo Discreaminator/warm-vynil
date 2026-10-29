@@ -36,6 +36,7 @@ catch_discover_tests(wg_tests)
 add_executable(wg_plugin_tests
     test_plugin.cpp
     ${WG_PLUGIN_CORE_SOURCES}
+    ${WG_UI_SOURCES}
 )
 
 target_include_directories(wg_plugin_tests PRIVATE
@@ -55,6 +56,7 @@ target_compile_definitions(wg_plugin_tests
 target_link_libraries(wg_plugin_tests PRIVATE
     wg_dsp
     WarmVynilFactoryData
+    WarmVynilUiData
     Catch2::Catch2WithMain
     juce::juce_audio_utils
     juce::juce_recommended_config_flags

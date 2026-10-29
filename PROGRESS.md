@@ -147,6 +147,52 @@ ctest --preset win-release --output-on-failure
 - Custom `PluginEditor` left in tree but not linked (M3).
 - Full DoD REAPER automation/PDC null session and clap-validator left for manual / CI follow-up.
 
+### STOP (historical)
+
+M2 closed; M3 implemented on `cursor/m3-vinyl-ui-352b` (see below).
+
+---
+
+## M3 — Variant B UI (2026-10-29) — DONE, STOPPED
+
+### Done
+
+- Replaced `GenericAudioProcessorEditor` with custom Variant B editor (`src/ui/*`) per SPEC §9.
+- Dark minimal chrome: vinyl platter + tonearm, large **Глубина** (`amount`), **Выход**, **Авто-уровень**, **Байпас**, preset bar, collapsible **Дополнительно**.
+- Platter spin from `TransportState::isPlaying` (VBlankAttachment, τ accel 0.35 s / decel 0.8 s, 200 °/s).
+- Theme tokens (`Theme.h`), Russian strings (`Strings.h`), OFL fonts embedded (`WarmVynilUiData`).
+- Branding in UI: **WARM VYNIL** / Discreaminator (not placeholder «WARM GROOVE»).
+- SVG references copied under `assets/ui/svg/` + `assets/svg/` (vector paint primary; PNGs not embedded).
+- Scale 75–200 % via preset menu + constrained resize; advanced panel grows height +230 logical px.
+
+### Build / artefacts
+
+```powershell
+cmake --preset win-release
+cmake --build --preset win-release --config Release
+ctest --preset win-release --output-on-failure
+```
+
+| Artefact | Path |
+|---|---|
+| VST3 | `build\win-release\WarmVynil_artefacts\Release\VST3\WARM VYNIL.vst3` |
+| CLAP | `build\win-release\WarmVynil_artefacts\Release\CLAP\WARM VYNIL.clap` |
+| Staged | `dist\plugins\VST3\` · `dist\plugins\CLAP\` |
+
+### Tests
+
+- `ctest`: **23/23 PASS**
+- pluginval strictness **10** (VST3 Win, **with GUI**): **SUCCESS**
+- REAPER platter smoke: staged plugins — insert from `dist\plugins\` and play to verify spin (manual)
+
+### Deviations / follow-ups
+
+- Inter Tight embedded as variable TTF; static weight selection limited — Inter SemiBold/Bold used as fallback role when needed.
+- Geist Mono lacks Cyrillic; unit strings with «дБ» drawn with Inter in chrome.
+- UI-1 pixel overlay vs `variant_B.png` / advanced not automated (`tools/ui_diff` optional); visual match is vector-from-SPEC coords ± font rasterization.
+- UI-CPU % at 60 fps not instrumented on reference machine this run.
+- Value text-field click-to-type and some hover/focus polish deferred polish (drag / double-click / wheel / arrows work).
+
 ### STOP
 
-**M2 DoD met for Windows VST3+CLAP wiring.** Do not start M3 until explicit user command.
+**M3 only.** Do not start M4 (ADAA polish, Remez OS, AutoGain calibrate, installer, etc.) until explicit user command.

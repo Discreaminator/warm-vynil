@@ -2,6 +2,7 @@
 #include "ParameterIds.h"
 #include "ProductInfo.h"
 #include "StateSerializer.h"
+#include "ui/PluginEditor.h"
 
 namespace wg::plugin {
 
@@ -144,8 +145,7 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
 juce::AudioProcessorEditor* PluginProcessor::createEditor()
 {
-    // M2 temporary UI (SPEC §12). Custom vinyl UI arrives in M3.
-    return new juce::GenericAudioProcessorEditor(*this);
+    return new wg::ui::PluginEditor(*this);
 }
 
 int PluginProcessor::getNumPrograms()

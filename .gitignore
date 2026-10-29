@@ -38,3 +38,6 @@ dist/
 tools/pluginval/
 *.zip
 
+
+.tmp_fonts/
+

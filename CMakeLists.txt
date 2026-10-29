@@ -97,6 +97,23 @@ juce_add_binary_data(WarmVynilFactoryData
         presets/factory/DeepTube.xml
 )
 
+# M3 UI assets: OFL fonts (+ optional SVG references). PNGs are NOT embedded (SPEC §9.1.8).
+juce_add_binary_data(WarmVynilUiData
+    HEADER_NAME UiAssets.h
+    NAMESPACE UiAssets
+    SOURCES
+        assets/fonts/Inter-Regular.ttf
+        assets/fonts/Inter-Medium.ttf
+        assets/fonts/Inter-SemiBold.ttf
+        assets/fonts/Inter-Bold.ttf
+        assets/fonts/InterTight-Variable.ttf
+        assets/fonts/Geist-Light.ttf
+        assets/fonts/Geist-Regular.ttf
+        assets/fonts/Geist-SemiBold.ttf
+        assets/fonts/GeistMono-Regular.ttf
+        assets/fonts/GeistMono-Medium.ttf
+)
+
 set(WG_PLUGIN_CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/src/plugin/ParameterLayout.cpp
     ${CMAKE_SOURCE_DIR}/src/plugin/ParamBridge.cpp
@@ -105,8 +122,22 @@ set(WG_PLUGIN_CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/src/plugin/PluginProcessor.cpp
 )
 
+set(WG_UI_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/ui/Fonts.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/WarmLookAndFeel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/VinylRecord.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/MacroKnob.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/RotaryKnob.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/SegmentedControl.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/ToggleSwitch.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/PresetBar.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/AdvancedPanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/PluginEditor.cpp
+)
+
 target_sources(WarmVynil PRIVATE
     ${WG_PLUGIN_CORE_SOURCES}
+    ${WG_UI_SOURCES}
     src/plugin/PluginEntry.cpp
 )
 
@@ -127,6 +158,7 @@ target_link_libraries(WarmVynil
     PRIVATE
         wg_dsp
         WarmVynilFactoryData
+        WarmVynilUiData
         juce::juce_audio_utils
         juce::juce_audio_plugin_client
     PUBLIC
