@@ -1,0 +1,42 @@
+# M0: Windows-only CI (VST3 + CLAP). macOS/AU deferred per user decision.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  windows:
+    name: Windows MSVC Release
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: cmake --preset ci
+
+      - name: Build
+        run: cmake --build --preset ci --config Release
+
+      - name: Test
+        run: ctest --preset ci --output-on-failure
+
+      - name: Smoke wg_render
+        shell: pwsh
+        run: |
+          $bin = Get-ChildItem -Recurse -Filter wg_render.exe build/ci | Select-Object -First 1
+          & $bin.FullName --signal sine --freq 1000 --level -6 --sr 48000 --seconds 0.25 --out build/ci/m0_sine.wav
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: discreaminator-windows
+          path: |
+            build/ci/**/Discreaminator.vst3/**
+            build/ci/**/*.clap
+            build/ci/**/wg_render.exe
+            build/ci/m0_sine.wav
+          if-no-files-found: warn

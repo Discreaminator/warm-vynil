@@ -1,0 +1,83 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "win-release",
+      "displayName": "Windows Release (MSVC)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/win-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "WG_BUILD_TESTS": "ON",
+        "WG_BUILD_STANDALONE": "OFF",
+        "WG_COPY_PLUGIN_AFTER_BUILD": "OFF"
+      }
+    },
+    {
+      "name": "dev-debug",
+      "displayName": "Windows Debug (MSVC)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/dev-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "WG_BUILD_TESTS": "ON",
+        "WG_BUILD_STANDALONE": "OFF"
+      }
+    },
+    {
+      "name": "ci",
+      "displayName": "CI Windows Release",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "WG_BUILD_TESTS": "ON",
+        "WG_BUILD_STANDALONE": "OFF",
+        "WG_COPY_PLUGIN_AFTER_BUILD": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "win-release",
+      "configurePreset": "win-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "dev-debug",
+      "configurePreset": "dev-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "win-release",
+      "configurePreset": "win-release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

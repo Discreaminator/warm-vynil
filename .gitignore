@@ -1,0 +1,40 @@
+# Build
+build/
+cmake-build-*/
+out/
+_deps/
+_deps_cache/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.VC.db
+CMakeSettings.json
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Artifacts
+*.wav
+!assets/**/*.wav
+*.log
+pluginval/
+
+# Python
+__pycache__/
+.venv/
+*.pyc
+
+# Local secrets / certs
+*.p12
+*.pfx
+*.key
+
+dist/
+tools/pluginval/
+*.zip
+

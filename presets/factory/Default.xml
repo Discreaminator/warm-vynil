@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Factory preset placeholder for M0; wired in M2 -->
+<WarmGroove preset="По умолчанию" stateVersion="1">
+  <PARAM id="amount" value="0.5"/>
+  <PARAM id="outGain" value="0"/>
+  <PARAM id="autoGain" value="1"/>
+  <PARAM id="bypass" value="0"/>
+</WarmGroove>
