@@ -33,9 +33,9 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: discreaminator-windows
+          name: warm-vynil-windows
           path: |
-            build/ci/**/Discreaminator.vst3/**
+            build/ci/**/*.vst3/**
             build/ci/**/*.clap
             build/ci/**/wg_render.exe
             build/ci/m0_sine.wav

@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(Discreaminator
+project(WarmVynil
     VERSION 0.1.0
-    DESCRIPTION "Discreaminator — vinyl cutting / tube RIAA character (Warm Groove SPEC)"
+    DESCRIPTION "WARM VYNIL — vinyl cutting / tube RIAA character (Warm Groove SPEC)"
     LANGUAGES C CXX
 )
 
@@ -48,10 +48,12 @@ if(WG_BUILD_STANDALONE)
     list(APPEND WG_FORMATS Standalone)
 endif()
 
-juce_add_plugin(Discreaminator
+# CMake target WarmVynil (no spaces). Host/UI name comes from PRODUCT_NAME / PluginConfig.
+juce_add_plugin(WarmVynil
     COMPANY_NAME "${WG_COMPANY_NAME}"
-    COMPANY_WEBSITE "https://github.com/vynilaudio/discreaminator"
-    COMPANY_EMAIL "dev@vynilaudio.local"
+    COMPANY_COPYRIGHT "${WG_COPYRIGHT}"
+    COMPANY_WEBSITE "https://github.com/discreaminator/warm-vynil"
+    COMPANY_EMAIL "dev@discreaminator.local"
     BUNDLE_ID "${WG_BUNDLE_ID}"
     PLUGIN_MANUFACTURER_CODE "${WG_PLUGIN_MANUFACTURER_CODE}"
     PLUGIN_CODE "${WG_PLUGIN_CODE}"
@@ -71,21 +73,21 @@ juce_add_plugin(Discreaminator
 )
 
 clap_juce_extensions_plugin(
-    TARGET Discreaminator
+    TARGET WarmVynil
     CLAP_ID "${WG_CLAP_ID}"
     CLAP_FEATURES audio-effect distortion stereo mono
 )
 
-target_sources(Discreaminator PRIVATE
+target_sources(WarmVynil PRIVATE
     src/plugin/PluginProcessor.cpp
     src/ui/PluginEditor.cpp
 )
 
-target_include_directories(Discreaminator PRIVATE
+target_include_directories(WarmVynil PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_compile_definitions(Discreaminator
+target_compile_definitions(WarmVynil
     PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
@@ -94,7 +96,7 @@ target_compile_definitions(Discreaminator
         JUCE_REPORT_APP_USAGE=0
 )
 
-target_link_libraries(Discreaminator
+target_link_libraries(WarmVynil
     PRIVATE
         wg_dsp
         juce::juce_audio_utils
@@ -105,7 +107,7 @@ target_link_libraries(Discreaminator
         juce::juce_recommended_warning_flags
 )
 
-wg_set_warnings(Discreaminator)
+wg_set_warnings(WarmVynil)
 
 # --- Offline render tool ---
 add_executable(wg_render
@@ -122,7 +124,8 @@ endif()
 
 include(cmake/Pluginval.cmake)
 
-message(STATUS "Discreaminator ${WG_PLUGIN_VERSION}")
+message(STATUS "${WG_PLUGIN_NAME} ${WG_PLUGIN_VERSION}")
 message(STATUS "  Company: ${WG_COMPANY_NAME}  codes: ${WG_PLUGIN_MANUFACTURER_CODE}/${WG_PLUGIN_CODE}")
 message(STATUS "  Formats: ${WG_FORMATS} + CLAP")
 message(STATUS "  Bundle/CLAP ID: ${WG_BUNDLE_ID}")
+message(STATUS "  ${WG_COPYRIGHT}")

@@ -1,15 +1,16 @@
-# Discreaminator
+# WARM VYNIL
 
 Vinyl cutting → cartridge → tube RIAA character insert effect. **No** surface noise, crackle, wow/flutter, or rumble.
 
-Implemented against `SPEC.md` (Warm Groove ТЗ). Product name: **Discreaminator** · Company: **Vynil Audio**.
+Implemented against `SPEC.md` (Warm Groove ТЗ). Product: **WARM VYNIL** · Company: **Discreaminator**.
 
 | | |
 |---|---|
 | Formats (M0) | **VST3** + **CLAP** (Windows) |
-| License | **AGPL-3.0** (JUCE AGPL path) |
-| Codes | manufacturer `Vnyl`, plugin `Dscr` |
-| Bundle / CLAP ID | `com.vynilaudio.discreaminator` |
+| License | **AGPL-3.0** — see `LICENSE` + `NOTICE` |
+| Copyright | Copyright (C) 2026 Discreaminator |
+| Codes | manufacturer `Dscr`, plugin `WVnl` |
+| Bundle / CLAP ID | `com.discreaminator.warmvynil` |
 
 ## Requirements (Windows)
 
@@ -22,11 +23,10 @@ Implemented against `SPEC.md` (Warm Groove ТЗ). Product name: **Discreaminator
 ```powershell
 git clone --recurse-submodules <repo-url> warm-groove
 cd warm-groove
-# If already cloned without submodules:
 git submodule update --init --recursive
 ```
 
-Pinned: **JUCE 8.0.15**, **clap-juce-extensions 0.26.0**.
+Pinned: **JUCE 8.0.15**, **clap-juce-extensions** `7adee3a`.
 
 ## Build (Release)
 
@@ -36,25 +36,14 @@ cmake --build --preset win-release --config Release
 ctest --preset win-release --output-on-failure
 ```
 
-Outputs (typical paths under `build/win-release`):
+Outputs (typical under `build/win-release`):
 
-- VST3: `Discreaminator_artefacts/Release/VST3/Discreaminator.vst3`
-- CLAP: `Discreaminator_artefacts/Release/CLAP/Discreaminator.clap`
-- Tests: `tests/Release/wg_tests.exe`
-- Offline sine: `tools/.../wg_render.exe`
+- VST3 / CLAP under `WarmVynil_artefacts/Release/`
+- Staged copies: `dist/plugins/VST3/` and `dist/plugins/CLAP/`
 
-### Copy into REAPER search paths (optional)
+### REAPER
 
-```powershell
-# VST3
-Copy-Item -Recurse "build\win-release\Discreaminator_artefacts\Release\VST3\Discreaminator.vst3" `
-  "$env:CommonProgramFiles\VST3\"
-# CLAP
-Copy-Item "build\win-release\Discreaminator_artefacts\Release\CLAP\Discreaminator.clap" `
-  "$env:CommonProgramFiles\CLAP\"
-```
-
-Then in REAPER: **Options → Preferences → Plug-ins → VST → Re-scan** (and enable CLAP path if needed).
+Add folder `dist\plugins\VST3` (and `dist\plugins\CLAP`), then **Re-scan**. Insert **WARM VYNIL** (manufacturer Discreaminator).
 
 ### Smoke sine WAV
 
@@ -65,7 +54,3 @@ Then in REAPER: **Options → Preferences → Plug-ins → VST → Re-scan** (an
 ## Milestone status
 
 See [PROGRESS.md](PROGRESS.md). **M0** = skeleton / passthrough. DSP starts at M1.
-
-## Spec source
-
-Authoritative ТЗ lives alongside this tree: `../warm_groove_spec/SPEC.md` (and is intended to be copied/linked into the repo as work continues).

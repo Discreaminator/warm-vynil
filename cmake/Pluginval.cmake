@@ -14,9 +14,9 @@ if(WG_RUN_PLUGINVAL AND PLUGINVAL_EXECUTABLE)
             --strictness-level 5
             --validate-in-process
             --output-dir "${CMAKE_BINARY_DIR}/pluginval"
-            "$<TARGET_FILE:Discreaminator_VST3>"
-        DEPENDS Discreaminator_VST3
-        COMMENT "Running pluginval strictness 5 on Discreaminator VST3"
+            "$<TARGET_FILE:WarmVynil_VST3>"
+        DEPENDS WarmVynil_VST3
+        COMMENT "Running pluginval strictness 5 on WARM VYNIL VST3"
         VERBATIM
     )
     message(STATUS "pluginval found: ${PLUGINVAL_EXECUTABLE}")
