@@ -2,6 +2,7 @@
 
 #include "dsp/Constants.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace wg::dsp {

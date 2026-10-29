@@ -33,6 +33,13 @@ add_subdirectory(extern/clap-juce-extensions EXCLUDE_FROM_ALL)
 # --- DSP library (no JUCE) ---
 add_library(wg_dsp STATIC
     src/dsp/Engine.cpp
+    src/dsp/MacroMap.cpp
+    src/dsp/stages/MonoBass.cpp
+    src/dsp/stages/RiaaDesign.cpp
+    src/dsp/stages/Riaa.cpp
+    src/dsp/stages/TubeLut.cpp
+    src/dsp/stages/TubeStage.cpp
+    src/dsp/stages/AutoGain.cpp
 )
 target_include_directories(wg_dsp PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
