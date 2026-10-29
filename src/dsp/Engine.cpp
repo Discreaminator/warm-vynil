@@ -92,7 +92,8 @@ void Engine::reset() noexcept
 
 void Engine::setTargets(const EngineParams& params) noexcept
 {
-    const bool osChanged = (params.osFactor != targets_.osFactor);
+    // OS / topology changes must go through prepare() on a non-RT thread (M2+).
+    // Storing osFactor here only; Oversampler keeps the last prepared factor until prepare().
     targets_ = params;
     amountSm_.setTarget(static_cast<double>(params.amount));
     inGainSm_.setTargetDb(static_cast<double>(params.inGainDb));
@@ -100,9 +101,6 @@ void Engine::setTargets(const EngineParams& params) noexcept
     mixSm_.setTarget(static_cast<double>(params.mix));
     hostBypassSm_.setTarget(params.bypass ? 1.0 : 0.0);
     autoGain_.setMode(params.autoGain);
-
-    if (osChanged && spec_.sampleRate > 0.0)
-        prepare(spec_);
 }
 
 void Engine::updateSmoothersAndCoeffs() noexcept

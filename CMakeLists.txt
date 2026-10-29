@@ -86,9 +86,28 @@ clap_juce_extensions_plugin(
     CLAP_FEATURES audio-effect distortion stereo mono
 )
 
+# Factory preset XML embedded for documentation / future BinaryData loaders (programs are coded in PresetManager).
+juce_add_binary_data(WarmVynilFactoryData
+    HEADER_NAME FactoryPresets.h
+    NAMESPACE FactoryPresets
+    SOURCES
+        presets/factory/Default.xml
+        presets/factory/LightWarm.xml
+        presets/factory/ClassicVinyl.xml
+        presets/factory/DeepTube.xml
+)
+
+set(WG_PLUGIN_CORE_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/plugin/ParameterLayout.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugin/ParamBridge.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugin/StateSerializer.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugin/PresetManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugin/PluginProcessor.cpp
+)
+
 target_sources(WarmVynil PRIVATE
-    src/plugin/PluginProcessor.cpp
-    src/ui/PluginEditor.cpp
+    ${WG_PLUGIN_CORE_SOURCES}
+    src/plugin/PluginEntry.cpp
 )
 
 target_include_directories(WarmVynil PRIVATE
@@ -107,6 +126,7 @@ target_compile_definitions(WarmVynil
 target_link_libraries(WarmVynil
     PRIVATE
         wg_dsp
+        WarmVynilFactoryData
         juce::juce_audio_utils
         juce::juce_audio_plugin_client
     PUBLIC

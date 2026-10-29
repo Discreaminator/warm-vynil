@@ -11,7 +11,7 @@ find_program(PLUGINVAL_EXECUTABLE pluginval
 if(WG_RUN_PLUGINVAL AND PLUGINVAL_EXECUTABLE)
     add_custom_target(pluginval
         COMMAND "${PLUGINVAL_EXECUTABLE}"
-            --strictness-level 5
+            --strictness-level 10
             --validate-in-process
             --output-dir "${CMAKE_BINARY_DIR}/pluginval"
             "$<TARGET_FILE:WarmVynil_VST3>"

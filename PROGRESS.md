@@ -100,6 +100,53 @@ M0 closed; M1 implemented on `cursor/m1-dsp-core-e42a` (see below).
 - T5 full −80/−90 dB with ADAA deferred to M4.
 - No M2/M3 UI / APVTS wiring beyond Engine (per stop rule).
 
+### STOP (historical)
+
+M1 closed; M2 implemented on `cursor/m2-plugin-wiring-2f51` (see below).
+
+---
+
+## M2 — Plugin wrapper / APVTS / state (2026-10-29) — DONE, STOPPED
+
+### Done
+
+- APVTS layout SPEC §7 (`ParameterLayout` / `ParameterIds`).
+- `ParamBridge`: raw atomics → `EngineParams` once per `processBlock`.
+- `PluginProcessor` wires `wg_dsp::Engine` (prepare / RT process / `ScopedNoDenormals` / mono|stereo buses / host bypass param / PDC via `setLatencySamples`).
+- Structural OS/ADAA/offlineHQ changes re-prepare off the audio thread (Engine `setTargets` no longer allocates).
+- `StateSerializer` (`stateVersion=1`) + `PresetManager` (4 factory programs §9.3 + user `.wgpreset` API under `Documents/WARM VYNIL/Presets`).
+- Temporary UI: `GenericAudioProcessorEditor` (custom vinyl UI deferred to M3).
+- `TransportState::isPlaying` atomic for M3 platter.
+- Factory XML in BinaryData (`WarmVynilFactoryData`); programs applied in code.
+- Plugin-level Catch2: T2, T6, T7, T11, T15 (`wg_plugin_tests`).
+
+### Build / artefacts
+
+```powershell
+cmake --preset win-release
+cmake --build --preset win-release --config Release
+ctest --preset win-release --output-on-failure
+```
+
+| Artefact | Path |
+|---|---|
+| VST3 | `build\win-release\WarmVynil_artefacts\Release\VST3\WARM VYNIL.vst3` |
+| CLAP | `build\win-release\WarmVynil_artefacts\Release\CLAP\WARM VYNIL.clap` |
+| Staged | `dist\plugins\VST3\` · `dist\plugins\CLAP\` |
+
+### Tests
+
+- `ctest`: **23/23 PASS** (17 Engine + 5 plugin + smoke/primitives as discovered).
+- pluginval strictness **10** (VST3 Win, `--skip-gui-tests`): **SUCCESS**.
+- clap-validator / auval / mac: not run (Windows-only M0 decision).
+- REAPER: binary present at `C:\Program Files\REAPER (x64)`; plugins staged to `dist\plugins\` for path scan — no automated insert/automation session in this run.
+
+### Deviations
+
+- User preset folder uses **`Documents/WARM VYNIL/Presets`** (product name) instead of SPEC `Warm Groove`.
+- Custom `PluginEditor` left in tree but not linked (M3).
+- Full DoD REAPER automation/PDC null session and clap-validator left for manual / CI follow-up.
+
 ### STOP
 
-**M1 DoD met. Do not start M2/M3** until explicit user command.
+**M2 DoD met for Windows VST3+CLAP wiring.** Do not start M3 until explicit user command.

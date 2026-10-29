@@ -1,8 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Factory preset placeholder for M0; wired in M2 -->
-<WarmGroove preset="По умолчанию" stateVersion="1">
-  <PARAM id="amount" value="0.5"/>
+<PARAMETERS preset="По умолчанию" stateVersion="1">
+  <PARAM id="amount" value="50"/>
   <PARAM id="outGain" value="0"/>
   <PARAM id="autoGain" value="1"/>
   <PARAM id="bypass" value="0"/>
-</WarmGroove>
+  <PARAM id="inGain" value="0"/>
+  <PARAM id="mix" value="100"/>
+  <PARAM id="monoFreq" value="150"/>
+  <PARAM id="monoDepth" value="100"/>
+  <PARAM id="tracingTrim" value="100"/>
+  <PARAM id="riaaTilt" value="0.5"/>
+  <PARAM id="riaaNeumann" value="1"/>
+  <PARAM id="cartFreq" value="14000"/>
+  <PARAM id="cartQ" value="1.2"/>
+  <PARAM id="crosstalk" value="-30"/>
+  <PARAM id="tubeTrim" value="100"/>
+  <PARAM id="tubeBias" value="0"/>
+  <PARAM id="tubeModel" value="0"/>
+  <PARAM id="xfmrSat" value="40"/>
+  <PARAM id="xfmrHF" value="20000"/>
+</PARAMETERS>

@@ -1,14 +1,19 @@
 #pragma once
 
+#include "ParamBridge.h"
+#include "ParameterLayout.h"
+#include "PresetManager.h"
+#include "TransportState.h"
 #include "dsp/Engine.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include <memory>
+#include <atomic>
 
 namespace wg::plugin {
 
-class PluginProcessor final : public juce::AudioProcessor
+class PluginProcessor final : public juce::AudioProcessor,
+                              private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     PluginProcessor();
@@ -29,17 +34,36 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return {}; }
-    void changeProgramName(int, const juce::String&) override {}
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String& newName) override;
 
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+    juce::AudioProcessorParameter* getBypassParameter() const override;
+
+    juce::AudioProcessorValueTreeState& getAPVTS() noexcept { return apvts_; }
+    const juce::AudioProcessorValueTreeState& getAPVTS() const noexcept { return apvts_; }
+    PresetManager& getPresetManager() noexcept { return presets_; }
+    TransportState& getTransportState() noexcept { return transport_; }
+    wg::dsp::Engine& getEngine() noexcept { return engine_; }
+
 private:
+    void parameterChanged(const juce::String& parameterID, float newValue) override;
+    void applyEngineTargets(bool allowStructuralPrepare);
+
+    juce::AudioProcessorValueTreeState apvts_;
+    ParamBridge bridge_;
+    PresetManager presets_;
+    TransportState transport_;
     wg::dsp::Engine engine_;
+
+    double preparedSampleRate_ = 0.0;
+    int preparedMaxBlock_ = 0;
+    std::atomic<bool> structuralPending_{ false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginProcessor)
 };
