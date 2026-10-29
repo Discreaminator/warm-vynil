@@ -18,7 +18,7 @@ endif()
 
 option(WG_BUILD_TESTS "Build Catch2 unit tests" ON)
 option(WG_COPY_PLUGIN_AFTER_BUILD "Copy plugins to system folders after build" OFF)
-option(WG_BUILD_STANDALONE "Build Standalone app (off for M0; user prefers VST3+CLAP)" OFF)
+option(WG_BUILD_STANDALONE "Build Standalone app (ON for pack-win / M5 installer)" OFF)
 
 include(cmake/PluginConfig.cmake)
 include(cmake/CompilerWarnings.cmake)

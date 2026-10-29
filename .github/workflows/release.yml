@@ -1,0 +1,130 @@
+# M5: tagged Windows release — build, package Inno installer, optional Authenticode.
+# Secrets (optional): WG_SIGN_PFX_BASE64, WG_SIGN_PFX_PASSWORD, WG_SIGN_TIMESTAMP_URL
+# Without secrets the installer is published unsigned (see docs/SIGNING.md).
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    name: Windows installer
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Resolve version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $ver = $tag.TrimStart('v')
+          if (-not ($ver -match '^\d+\.\d+\.\d+')) {
+            throw "Tag '$tag' must look like v0.1.0"
+          }
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Version $ver"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          winget install --id JRSoftware.InnoSetup -e --accept-package-agreements --accept-source-agreements --disable-interactivity
+          $iscc = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            $iscc = Get-ChildItem -Path "$env:LOCALAPPDATA\Programs","${env:ProgramFiles(x86)}","${env:ProgramFiles}" -Filter ISCC.exe -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $iscc) { throw 'ISCC.exe not found after winget install' }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "ISCC=$iscc"
+
+      - name: Configure (pack-win / Standalone ON)
+        run: cmake --preset pack-win
+
+      - name: Build Release
+        run: cmake --build --preset pack-win --config Release
+
+      - name: Test
+        run: ctest --preset pack-win --output-on-failure
+        continue-on-error: false
+
+      - name: Materialize signing PFX (optional)
+        shell: pwsh
+        env:
+          WG_SIGN_PFX_BASE64: ${{ secrets.WG_SIGN_PFX_BASE64 }}
+          WG_SIGN_PFX_PASSWORD: ${{ secrets.WG_SIGN_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WG_SIGN_PFX_BASE64)) {
+            Write-Host 'No WG_SIGN_PFX_BASE64 secret — packaging will be unsigned.'
+            return
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'warmvynil-codesign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WG_SIGN_PFX_BASE64))
+          "WG_SIGN_PFX_PATH=$pfx" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if ($env:WG_SIGN_PFX_PASSWORD) {
+            "WG_SIGN_PFX_PASSWORD=$($env:WG_SIGN_PFX_PASSWORD)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          if ('${{ secrets.WG_SIGN_TIMESTAMP_URL }}') {
+            "WG_SIGN_TIMESTAMP_URL=${{ secrets.WG_SIGN_TIMESTAMP_URL }}" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          Write-Host "PFX written to $pfx"
+
+      - name: Package installer
+        shell: pwsh
+        run: |
+          $ver = '${{ steps.ver.outputs.version }}'
+          powershell -ExecutionPolicy Bypass -File .\installer\windows\package.ps1 `
+            -BuildDir build\pack-win `
+            -Configuration Release `
+            -Version $ver `
+            -IsccPath $env:ISCC
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: warm-vynil-windows-installer
+          path: |
+            dist/installer/WarmVynil-Setup-*.exe
+            dist/installer/WarmVynil-Setup-*.exe.sha256
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ver = '${{ steps.ver.outputs.version }}'
+          $setup = "dist/installer/WarmVynil-Setup-$ver.exe"
+          $sha = "$setup.sha256"
+          $signed = -not [string]::IsNullOrWhiteSpace($env:WG_SIGN_PFX_PATH)
+          $note = if ($signed) {
+            'Windows installer (Authenticode signed).'
+          } else {
+            @"
+          Windows installer — **unsigned** (no paid codesign cert in CI secrets).
+          SmartScreen may warn on first run: More info → Run anyway.
+          See docs/SIGNING.md and docs/INSTALL.md.
+          "@
+          }
+          $body = @"
+          ## WARM VYNIL $ver
+
+          $note
+
+          ### Install paths
+          - VST3 → ``C:\Program Files\Common Files\VST3\``
+          - CLAP → ``C:\Program Files\Common Files\CLAP\``
+          - Standalone → ``C:\Program Files\Discreaminator\WARM VYNIL\``
+
+          After install: REAPER → Options → Preferences → Plug-ins → VST → Re-scan.
+          "@
+          gh release create "${{ github.ref_name }}" $setup $sha `
+            --title "WARM VYNIL $ver" `
+            --notes $body
