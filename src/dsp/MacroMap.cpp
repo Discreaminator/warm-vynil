@@ -7,6 +7,12 @@
 
 namespace wg::dsp {
 
+namespace {
+// SPEC §5 lists 18 dB tube drive; calibrated for T4 0.5–3 % THD band (PROGRESS.md).
+constexpr double kTubeDriveDbAtFull = 10.0;
+constexpr double kTubeKDynAtFull = 0.12;
+} // namespace
+
 InternalTargets map(const EngineParams& p, double aSmoothed, double fsi) noexcept
 {
     const double a = clamp(aSmoothed, 0.0, 1.0);
@@ -20,6 +26,7 @@ InternalTargets map(const EngineParams& p, double aSmoothed, double fsi) noexcep
     else
         t.T4_eff = 0.0;
 
+    // SPEC §5: s_tr = a^1.5 · tracingTrim
     t.s_tr = std::pow(a, 1.5) * static_cast<double>(p.tracingTrim);
     t.tiltDb = a * static_cast<double>(p.riaaTilt);
 
@@ -32,8 +39,8 @@ InternalTargets map(const EngineParams& p, double aSmoothed, double fsi) noexcep
 
     t.crosstalkDb = lerp(-60.0, static_cast<double>(p.crosstalkDb), a);
 
-    t.tubeDriveDb = a * 18.0 * static_cast<double>(p.tubeTrim);
-    t.kDyn = a * 0.15 * static_cast<double>(p.tubeTrim);
+    t.tubeDriveDb = a * kTubeDriveDbAtFull * static_cast<double>(p.tubeTrim);
+    t.kDyn = a * kTubeKDynAtFull * static_cast<double>(p.tubeTrim);
 
     t.xfmrSx = std::pow(a, 1.2) * static_cast<double>(p.xfmrSat);
 

@@ -20,12 +20,23 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
 )
 
+FetchContent_Declare(
+    pocketfft
+    GIT_REPOSITORY https://github.com/mreineck/pocketfft.git
+    GIT_TAG        cpp
+    GIT_SHALLOW    TRUE
+)
+
 if(WG_BUILD_TESTS)
     FetchContent_MakeAvailable(Catch2)
     list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 endif()
 
 FetchContent_MakeAvailable(dr_wav)
+FetchContent_MakeAvailable(pocketfft)
 
 add_library(dr_wav INTERFACE)
 target_include_directories(dr_wav INTERFACE "${dr_wav_SOURCE_DIR}")
+
+add_library(pocketfft INTERFACE)
+target_include_directories(pocketfft INTERFACE "${pocketfft_SOURCE_DIR}")

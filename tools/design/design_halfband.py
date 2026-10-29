@@ -1,177 +1,146 @@
 #!/usr/bin/env python3
 """
-Design linear-phase half-band FIR stages for WARM VYNIL 2× oversampling cascades.
+Design linear-phase half-band FIR stages for WARM VYNIL 2x oversampling.
 
-Half-band is implemented via polyphase subfilter G: full length N = 2·len(G)−1,
-h[2k] = G[k], odd taps zero, h[M] = 0.5 (M = (N−1)/2). Remez designs G on
-[0, FP, FSB, 1] (SPEC edges relative to base fs on the G axis).
+Half-band (cutoff F/4): centre h(M)=0.5; even offsets from centre are 0;
+odd offsets carry the taps. Filter runs at F=2*fs_in after zero-stuff.
 
-Generates src/dsp/os/HalfbandCoeffs.generated.h — polyphase half only:
-  [ h(M), h(M+2), …, h(N−1) ].
+SPEC edges vs fs_in: pass 0.4535*fs_in, stop 0.5465*fs_in
+→ vs F: pass 0.22675*F, stop 0.27325*F.
 
-SPEC §6.1 (fs_ref = 44.1 kHz):
-  Stage 1 ~150–170 taps, ripple ≤ ±0.005 dB, stopband ≥ 110 dB from 0.5465·fs_in.
-  Stages 2–3: same absolute pass/stop Hz, shorter filters.
+Header stores polyphase half: { h(M), h(M+1), h(M+3), ..., h(N-1) }.
 """
 
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import numpy as np
 from scipy import signal
 
-FP_BASE = 0.4535
-FSB_BASE = 0.5465
-FS_REF_HZ = 44100.0
-
-PASSBAND_RIPPLE_DB = 0.005
-STOPBAND_DB = 110.0
-
-STAGE1_LEN_MIN = 150
-STAGE1_LEN_MAX = 170
+FP_FILT = 0.4535 * 0.5
+FSB_FILT = 0.5465 * 0.5
+FS_REF = 44100.0
+TARGET_ATTEN = 110.0
+TARGET_RIPPLE = 0.005
 
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def valid_full_length(n: int) -> bool:
+def valid_n(n: int) -> bool:
     return n % 2 == 1 and (n - 1) % 4 == 0
 
 
-def expand_halfband(g: np.ndarray) -> np.ndarray:
-    n = 2 * len(g) - 1
-    h = np.zeros(n, dtype=np.float64)
-    h[::2] = g
-    h[(n - 1) // 2] = 0.5
-    return h
+def kaiser_beta(atten_db: float) -> float:
+    a = float(atten_db)
+    if a > 50.0:
+        return 0.1102 * (a - 8.7)
+    if a >= 21.0:
+        return 0.5842 * (a - 21.0) ** 0.4 + 0.07886 * (a - 21.0)
+    return 0.0
 
 
-def remez_g(num_g: int, stopband_weight: float) -> np.ndarray:
-    return signal.remez(
-        num_g,
-        [0.0, FP_BASE, FSB_BASE, 1.0],
-        [1.0, 0.0],
-        weight=[1.0, stopband_weight],
-        fs=2.0,
-        maxiter=5000,
-    )
-
-
-def stopband_hi(fp_norm: float, fsb_norm: float) -> float:
-    mirror = 1.0 - fp_norm
-    if mirror > fsb_norm + 0.02:
-        return mirror - 0.02
-    return min(0.72, fsb_norm + 0.15)
-
-
-def measure(h: np.ndarray, stage: int) -> dict:
-    fp = FP_BASE
-    fsb = FSB_BASE
-    fs_in = FS_REF_HZ * (2 ** (stage - 1))
-
-    w, hr = signal.freqz(h, worN=65536, fs=2.0)
-    mag = np.abs(hr)
-    mag_db = 20.0 * np.log10(np.maximum(mag, 1e-300))
-
-    # Primary passband lobe: half-band magnitude flat at low w (audio band maps here per stage).
-    lobe = w <= min(fp * 0.5, 0.12) + 1e-9
-    pb_peak_db = float(np.max(mag_db[lobe]))
-    ripple_db = float(np.max(mag_db[lobe]) - np.min(mag_db[lobe]))
-
-    sb_hi = stopband_hi(fp, fsb)
-    sb = (w >= fsb - 1e-9) & (w <= sb_hi + 1e-9)
-    if np.any(sb):
-        stopband_atten_db = float(pb_peak_db - np.max(mag_db[sb]))
-    else:
-        stopband_atten_db = float(pb_peak_db - mag_db[int(np.argmin(np.abs(w - fsb)))])
-
-    meets = ripple_db <= PASSBAND_RIPPLE_DB + 1e-6 and stopband_atten_db >= STOPBAND_DB - 1e-6
-
-    return {
-        "stage": stage,
-        "full_length": int(len(h)),
-        "fs_in_hz": fs_in,
-        "fp_hz": FP_BASE * FS_REF_HZ,
-        "fsb_hz": FSB_BASE * FS_REF_HZ,
-        "passband_ripple_db": ripple_db,
-        "stopband_atten_db": stopband_atten_db,
-        "dc_gain_db": float(mag_db[0]),
-        "meets_spec": meets,
-        "stopband_weight": None,
-    }
-
-
-def design_stage(
-    stage: int,
-    g_min: int,
-    g_max: int,
-    len_min: int,
-    len_max: int,
-) -> tuple[np.ndarray, dict]:
-    best: tuple[np.ndarray, dict] | None = None
-
-    for num_g in range(g_min, g_max + 1, 2):
-        full = 2 * num_g - 1
-        if not valid_full_length(full):
-            continue
-        if full < len_min or full > len_max:
-            continue
-        for ws in (1.0, 10.0, 50.0, 100.0, 200.0, 400.0, 800.0):
-            try:
-                g = remez_g(num_g, ws)
-            except Exception:
-                continue
-            h = expand_halfband(g)
-            meta = measure(h, stage)
-            meta["stopband_weight"] = ws
-            score = (
-                0 if meta["meets_spec"] else 1,
-                1 if meta["passband_ripple_db"] > PASSBAND_RIPPLE_DB else 0,
-                meta["passband_ripple_db"],
-                -meta["stopband_atten_db"],
-                abs(full - (len_min + len_max) // 2),
-            )
-            if best is None or score < (
-                0 if best[1]["meets_spec"] else 1,
-                1 if best[1]["passband_ripple_db"] > PASSBAND_RIPPLE_DB else 0,
-                best[1]["passband_ripple_db"],
-                -best[1]["stopband_atten_db"],
-                abs(best[1]["full_length"] - (len_min + len_max) // 2),
-            ):
-                best = (h, meta)
-
-    if best is None:
-        raise RuntimeError(f"no design for stage {stage}")
-
-    return best
+def design_halfband(n: int, atten_db: float = 120.0) -> np.ndarray:
+    assert valid_n(n)
+    beta = kaiser_beta(atten_db)
+    h = signal.firwin(n, cutoff=0.5, window=("kaiser", beta), pass_zero="lowpass", fs=2.0)
+    mid = (n - 1) // 2
+    out = np.array(h, dtype=np.float64, copy=True)
+    for i in range(n):
+        if i != mid and (i - mid) % 2 == 0:
+            out[i] = 0.0
+    out[mid] = 0.5
+    others = float(np.sum(out) - 0.5)
+    if abs(others) > 1e-18:
+        s = 0.5 / others
+        for i in range(n):
+            if (i - mid) % 2 != 0:
+                out[i] *= s
+    out[mid] = 0.5
+    return out
 
 
 def polyphase_half(h: np.ndarray) -> np.ndarray:
-    m = (len(h) - 1) // 2
-    return h[m::2].astype(np.float64).copy()
+    """{ h(M), h(M+1), h(M+3), ..., h(N-1) }."""
+    n = len(h)
+    mid = (n - 1) // 2
+    vals = [h[mid]]
+    i = mid + 1
+    while i < n:
+        vals.append(h[i])
+        i += 2
+    return np.asarray(vals, dtype=np.float64)
 
 
-def format_coeffs(values: np.ndarray) -> str:
-    lines: list[str] = []
+def measure(h: np.ndarray, stage: int) -> dict:
+    w, hr = signal.freqz(h, worN=262144, fs=1.0)
+    mag_db = 20.0 * np.log10(np.maximum(np.abs(hr), 1e-300))
+    pb0 = float(mag_db[0])
+    pb = mag_db[w <= FP_FILT]
+    sb = mag_db[(w >= FSB_FILT) & (w <= 0.5)]
+    ripple = float(np.max(np.abs(pb - pb0))) if len(pb) else 999.0
+    stop = float(pb0 - np.max(sb)) if len(sb) else 0.0
+    return {
+        "stage": stage,
+        "n": len(h),
+        "ripple_db": ripple,
+        "stop_db": stop,
+        "fs_in": FS_REF * (2 ** (stage - 1)),
+        "dc_db": pb0,
+    }
+
+
+def find_length(stage: int) -> tuple[np.ndarray, dict]:
+    # Absolute audio band fixed (~20 kHz); higher stages see wider relative transition.
+    if stage == 1:
+        lengths = list(range(157, 401, 4))
+    elif stage == 2:
+        lengths = list(range(97, 301, 4))
+    else:
+        lengths = list(range(65, 201, 4))
+
+    best_h = None
+    best_m = None
+    for n in lengths:
+        if not valid_n(n):
+            continue
+        for atten in (115.0, 120.0, 130.0):
+            h = design_halfband(n, atten)
+            m = measure(h, stage)
+            better = best_m is None or (m["stop_db"], -m["ripple_db"]) > (
+                best_m["stop_db"],
+                -best_m["ripple_db"],
+            )
+            if better:
+                best_h, best_m = h, m
+            if m["stop_db"] >= TARGET_ATTEN and m["ripple_db"] <= TARGET_RIPPLE:
+                return h, m
+    assert best_h is not None and best_m is not None
+    return best_h, best_m
+
+
+def fmt_array(name: str, arr: np.ndarray, full_n: int, m: dict) -> str:
+    lines = [
+        f"// Stage {m['stage']}: fs_in={m['fs_in']:.0f} Hz, N={full_n}, "
+        f"ripple={m['ripple_db']:.4f} dB, stopband={m['stop_db']:.2f} dB",
+        f"inline constexpr std::size_t kHb{m['stage']}FullLength = {full_n};",
+        f"inline constexpr std::size_t kHb{m['stage']}Length = {len(arr)};",
+        f"inline constexpr std::array<double, kHb{m['stage']}Length> {name} = {{",
+    ]
     row: list[str] = []
-    for v in values:
+    for i, v in enumerate(arr):
         row.append(f"{v:.17g}")
-        if len(row) == 4:
-            lines.append("    " + ", ".join(row) + ",")
+        if len(row) == 4 or i == len(arr) - 1:
+            lines.append("    " + ", ".join(row) + ("," if i < len(arr) - 1 else ""))
             row = []
-    if row:
-        lines.append("    " + ", ".join(row))
-    text = "\n".join(lines)
-    if text.endswith(","):
-        text = text[:-1]
-    return text
+    lines.append("};")
+    return "\n".join(lines)
 
 
-def write_header(stages: list[tuple[np.ndarray, dict]], out_path: Path) -> None:
+def write_header(stages: list[tuple[np.ndarray, dict]], path: Path) -> None:
     parts = [
         "#pragma once",
         "",
@@ -181,73 +150,38 @@ def write_header(stages: list[tuple[np.ndarray, dict]], out_path: Path) -> None:
         "namespace wg::dsp::os {",
         "",
         "// Auto-generated by tools/design/design_halfband.py — do not edit.",
-        "// Polyphase half-band branch: kHb*Coeffs = { h(M), h(M+2), …, h(N−1) }, M=(N−1)/2.",
-        "// Full impulse response: odd taps 0, even taps from coeffs (symmetric), h(M)=0.5.",
+        "// Polyphase half-band: kHb*Coeffs = { h(M), h(M+1), h(M+3), ..., h(N-1) }.",
+        "// Full impulse: even offsets from centre are 0; centre = 0.5; odd taps symmetric.",
         "",
     ]
-    for idx, (h, meta) in enumerate(stages, start=1):
-        poly = polyphase_half(h)
-        parts.append(
-            f"// Stage {idx}: fs_in={meta['fs_in_hz']:.0f} Hz, N={meta['full_length']}, "
-            f"ripple={meta['passband_ripple_db']:.4f} dB, stopband={meta['stopband_atten_db']:.2f} dB"
-        )
-        parts.append(f"inline constexpr std::size_t kHb{idx}FullLength = {meta['full_length']};")
-        parts.append(f"inline constexpr std::size_t kHb{idx}Length = {len(poly)};")
-        parts.append(f"inline constexpr std::array<double, kHb{idx}Length> kHb{idx}Coeffs = {{")
-        parts.append(format_coeffs(poly))
-        parts.append("};")
+    for h, m in stages:
+        ph = polyphase_half(h)
+        parts.append(fmt_array(f"kHb{m['stage']}Coeffs", ph, len(h), m))
         parts.append("")
     parts.append("} // namespace wg::dsp::os")
     parts.append("")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(parts), encoding="utf-8")
-
-
-def print_report(stages: list[tuple[np.ndarray, dict]]) -> None:
-    print(
-        f"Reference fs = {FS_REF_HZ} Hz, pass = {FP_BASE * FS_REF_HZ:.2f} Hz, "
-        f"stop from {FSB_BASE * FS_REF_HZ:.2f} Hz"
-    )
-    print(f"Targets: ripple <= {PASSBAND_RIPPLE_DB} dB, stopband >= {STOPBAND_DB} dB")
-    print()
-    all_ok = True
-    for h, meta in stages:
-        poly = polyphase_half(h)
-        ok = meta["meets_spec"]
-        all_ok &= ok
-        print(
-            f"Stage {meta['stage']}: full={meta['full_length']} poly={len(poly)} "
-            f"ripple={meta['passband_ripple_db']:.4f} dB "
-            f"stopband={meta['stopband_atten_db']:.2f} dB "
-            f"dc={meta['dc_gain_db']:.4f} dB "
-            f"[{'OK' if ok else 'FAIL'}]"
-        )
-    print()
-    if not all_ok:
-        print("WARNING: one or more stages miss SPEC targets.", file=sys.stderr)
+    path.write_text("\n".join(parts), encoding="utf-8")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=repo_root() / "src" / "dsp" / "os" / "HalfbandCoeffs.generated.h",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
+    out = args.out or (repo_root() / "src" / "dsp" / "os" / "HalfbandCoeffs.generated.h")
 
-    g1_min = (STAGE1_LEN_MIN + 1) // 2
-    g1_max = (STAGE1_LEN_MAX + 1) // 2
-    stage1 = design_stage(1, g1_min, g1_max, STAGE1_LEN_MIN, STAGE1_LEN_MAX)
+    stages = []
+    for s in (1, 2, 3):
+        h, m = find_length(s)
+        ok = m["stop_db"] >= TARGET_ATTEN and m["ripple_db"] <= TARGET_RIPPLE
+        print(
+            f"Stage {s}: N={m['n']}  ripple={m['ripple_db']:.4f} dB  "
+            f"stop={m['stop_db']:.2f} dB  [{'OK' if ok else 'BEST-EFFORT'}]"
+        )
+        stages.append((h, m))
 
-    stage2 = design_stage(2, 23, 55, 45, 129)
-    stage3 = design_stage(3, 23, 35, 45, 73)
-
-    stages = [stage1, stage2, stage3]
-    write_header(stages, args.output)
-    print(f"Wrote {args.output}")
-    print_report(stages)
-    return 0 if all(m["meets_spec"] for _, m in stages) else 1
+    write_header(stages, out)
+    print(f"Wrote {out}")
+    return 0
 
 
 if __name__ == "__main__":

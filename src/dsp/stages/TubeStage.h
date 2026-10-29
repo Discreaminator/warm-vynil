@@ -8,39 +8,40 @@ namespace wg::dsp {
 struct TubeTargets
 {
     double driveDb = 0.0;
-    double tubeBias = 0.0;
+    double tubeBias = 0.0; // −1…+1 user
     double kDyn = 0.0;
     TubeModel model = TubeModel::Koren;
+    bool adaa = false; // ignored in M1 processing path
 };
 
-/** 12AX7 stage: Koren LUT or fast tanh (SPEC §4.5). No ADAA in M1. */
+/** 12AX7 stage: Koren LUT (default) or Fast tanh (SPEC §4.5). */
 class TubeStage
 {
 public:
-    static constexpr double kVsw = 1.5;
+    void prepare(double fsi) noexcept;
 
-    void prepare(double fsi, TubeLut& lut) noexcept;
+    void reset() noexcept;
 
-    void reset() noexcept { env_ = 0.0; }
-
-    void setTargets(const TubeTargets& t) noexcept { targets_ = t; }
+    void setTargets(const TubeTargets& t) noexcept;
 
     [[nodiscard]] double processSample(double x) noexcept;
 
+    /** Shared LUT accessor for isolated tests. */
+    [[nodiscard]] const TubeLut& lut() const noexcept { return lut_; }
+
 private:
     [[nodiscard]] double processKoren(double x) noexcept;
-
     [[nodiscard]] double processFast(double x) noexcept;
 
-    void updateEnvCoeffs() noexcept;
-
     double fsi_ = 48000.0;
-    TubeLut* lut_ = nullptr;
     TubeTargets targets_{};
-
+    TubeLut lut_{};
     double env_ = 0.0;
-    double attackCoeff_ = 0.0;
-    double releaseCoeff_ = 0.0;
+    double atkCoeff_ = 0.0;
+    double relCoeff_ = 0.0;
+    double vb_ = -1.5;
+    double a0_ = 1.0;
+    double driveLin_ = 1.0;
 };
 
 } // namespace wg::dsp

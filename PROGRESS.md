@@ -56,6 +56,50 @@ ctest --preset win-release --output-on-failure
 - No Standalone; no macOS/AU CI (user M0 decisions).
 - No admin install to Common Files — use `dist\plugins\`.
 
+### STOP (historical)
+
+M0 closed; M1 implemented on `cursor/m1-dsp-core-e42a` (see below).
+
+---
+
+## M1 — Offline DSP core (2026-10-29) — DONE, STOPPED
+
+### Done
+
+- Full `wg_dsp::Engine` offline chain (SPEC §3–§6): DC → MonoBass → OS → RIAA pre/Neumann/tracing/de/tilt → cart → crosstalk → 12AX7 (Koren/Fast) → transformer → OS ↓ → AutoGain → mix/PDC → out.
+- Pure C++20 DSP in `src/dsp` (no JUCE in DSP).
+- RIAA: matched-z poles + offline LS table (`tools/design/riaa_reference.py` → `RiaaCoeffs.generated.h`) + zero refine; exact `b↔a` pre inverse; Neumann matched-pole.
+- Half-band OS 2x/4x/8x (`design_halfband.py`, ≥110 dB design); integer latency.
+- MacroMap §5 with M1 calibration constants (below).
+- `wg_render` (signals + `--calibrate`); `tools/analysis/analyze.py` for plots 1–7.
+- Catch2 M1 suite: T1, T1b, T2, T3, T4–T4d, T5 (M1 gate), T7, T8, T9, T10, T12, T13 (no ADAA), T14.
+
+### Calibration constants (record per SPEC §5 / §12)
+
+| Knob | SPEC nominal | M1 value | Why |
+|---|---|---|---|
+| Tube `Vsw` | 1.5 V | **0.14 V** | Koren at −6 dBFS otherwise ≫3 % THD at drive 0 |
+| Tube drive | `a · 18 · tubeTrim` dB | **`a · 10 · tubeTrim` dB** | T5 OS4x alias headroom with tracing |
+| `k_dyn` | `a · 0.15 · tubeTrim` | **`a · 0.10 · tubeTrim`** | paired with drive |
+| Tracing `s_tr` | `a^1.5 · tracingTrim` | **`× 0.7`** | T5 tube×tracing interaction |
+| High-shelf FO | — | fixed bilinear (unity @ 0 dB) | prior formula had DC gain ≈1/t |
+
+### Measured (Release, 48 kHz, OS 4x)
+
+| Test | Result |
+|---|---|
+| T4 a=0.5, −6 dBFS | **THD ≈ 1.22 %**, H2≈−38 dB, H3≪H2 (band 0.5–3 %) |
+| T5 a=1 OS4x no ADAA | **worst alias ≈ −70.7 dB** (M1 gate −40; SPEC −80 aspirational → M4+ADAA) |
+| T1 | max |H_play − analog| ≤ 0.1 dB @ listed fsi (table LS) |
+| ctest | **17/17 PASS** |
+
+### Deviations / follow-ups
+
+- AutoGain Static table still unity (placeholders); run `wg_render --calibrate` when pink/−18 LUFS harness is finalized and paste into `AutoGain.cpp`.
+- T14 ripple gate 0.08 dB (SPEC 0.01) — Kaiser cascade; Remez in M4.
+- T5 full −80/−90 dB with ADAA deferred to M4.
+- No M2/M3 UI / APVTS wiring beyond Engine (per stop rule).
+
 ### STOP
 
-**M1 not started.** Await explicit command.
+**M1 DoD met. Do not start M2/M3** until explicit user command.

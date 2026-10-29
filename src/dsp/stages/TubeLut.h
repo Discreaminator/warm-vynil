@@ -5,33 +5,33 @@
 
 namespace wg::dsp {
 
-/** Immutable 12AX7 Koren plate voltage LUT (SPEC §4.5). Built in prepare(), not audio thread. */
+/** Immutable shared 12AX7 plate-voltage LUT + antiderivative (SPEC §4.5). Built in prepare. */
 class TubeLut
 {
 public:
-    static constexpr int kNumPoints = 4097;
+    static constexpr std::size_t kNumPoints = 4097;
     static constexpr double kVgkMin = -6.0;
     static constexpr double kVgkMax = 2.0;
-    static constexpr double kVbias = -1.5;
 
-    void prepare() noexcept;
+    void build() noexcept;
 
-    [[nodiscard]] bool isReady() const noexcept { return ready_; }
+    [[nodiscard]] bool ready() const noexcept { return ready_; }
 
-    [[nodiscard]] double evaluateVp(double vgk) const noexcept;
+    /** Hermite interpolate Vp(Vgk). */
+    [[nodiscard]] double lookupVp(double vgk) const noexcept;
 
-    /** dVp/dVgk from LUT (A0 at bias). */
-    [[nodiscard]] double evaluateA0(double vgk) const noexcept;
+    /** Slope dVp/dVgk at Vgk (from LUT differences). */
+    [[nodiscard]] double lookupSlope(double vgk) const noexcept;
 
-    [[nodiscard]] double vpAtBias() const noexcept { return evaluateVp(kVbias); }
-
-    [[nodiscard]] double a0AtBias() const noexcept { return evaluateA0(kVbias); }
+    /** Antiderivative P(Vgk) for ADAA (M4). */
+    [[nodiscard]] double lookupP(double vgk) const noexcept;
 
 private:
-    [[nodiscard]] static double solveVp(double vgkEff) noexcept;
+    [[nodiscard]] static double korenIp(double vgk, double vp) noexcept;
+    [[nodiscard]] static double solveVp(double vgk) noexcept;
 
     std::array<double, kNumPoints> vp_{};
-    std::array<double, kNumPoints> a0_{};
+    std::array<double, kNumPoints> p_{};
     bool ready_ = false;
 };
 

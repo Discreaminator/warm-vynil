@@ -1,49 +1,43 @@
 #include "TubeLut.h"
 
-#include "dsp/util/MathUtil.h"
-
 #include <cmath>
 
 namespace wg::dsp {
 
 namespace {
-
 constexpr double kMu = 100.0;
 constexpr double kEx = 1.4;
 constexpr double kKg1 = 1060.0;
 constexpr double kKp = 600.0;
 constexpr double kKvb = 300.0;
-constexpr double kBplus = 250.0;
+constexpr double kBp = 250.0;
 constexpr double kRa = 100000.0;
+} // namespace
 
-[[nodiscard]] double effectiveVgk(double vgk) noexcept
+double TubeLut::korenIp(double vgk, double vp) noexcept
 {
-    if (vgk <= 0.0)
-        return vgk;
-    return 0.7 * std::tanh(vgk / 0.7);
-}
-
-[[nodiscard]] double plateCurrent(double vgkEff, double vp) noexcept
-{
-    const double arg = kKp * (1.0 / kMu + vgkEff / std::sqrt(kKvb + vp * vp));
-    const double e1 = (vp / kKp) * std::log1p(std::exp(arg));
+    const double e1 = (vp / kKp)
+                      * std::log(1.0 + std::exp(kKp * (1.0 / kMu + vgk / std::sqrt(kKvb + vp * vp))));
     if (e1 <= 0.0)
         return 0.0;
     return 2.0 * std::pow(e1, kEx) / kKg1;
 }
 
-} // namespace
-
-double TubeLut::solveVp(double vgkEff) noexcept
+double TubeLut::solveVp(double vgk) noexcept
 {
+    // Effective grid with soft clip for Vgk > 0
+    double vg = vgk;
+    if (vg > 0.0)
+        vg = 0.7 * std::tanh(vg / 0.7);
+
     double lo = 0.0;
-    double hi = kBplus;
+    double hi = kBp;
     for (int i = 0; i < 60; ++i)
     {
         const double mid = 0.5 * (lo + hi);
-        const double ip = plateCurrent(vgkEff, mid);
-        const double f = kBplus - kRa * ip - mid;
-        if (f > 0.0)
+        const double ip = korenIp(vg, mid);
+        const double vpLoad = kBp - kRa * ip;
+        if (vpLoad > mid)
             lo = mid;
         else
             hi = mid;
@@ -51,73 +45,81 @@ double TubeLut::solveVp(double vgkEff) noexcept
     return 0.5 * (lo + hi);
 }
 
-void TubeLut::prepare() noexcept
+void TubeLut::build() noexcept
 {
-    const double step = (kVgkMax - kVgkMin) / static_cast<double>(kNumPoints - 1);
-    for (int i = 0; i < kNumPoints; ++i)
+    const double span = kVgkMax - kVgkMin;
+    const double dx = span / static_cast<double>(kNumPoints - 1);
+
+    for (std::size_t i = 0; i < kNumPoints; ++i)
     {
-        const double vgk = kVgkMin + static_cast<double>(i) * step;
-        const double vgkEff = effectiveVgk(vgk);
-        vp_[static_cast<std::size_t>(i)] = solveVp(vgkEff);
+        const double vgk = kVgkMin + dx * static_cast<double>(i);
+        vp_[i] = solveVp(vgk);
     }
 
-    for (int i = 0; i < kNumPoints; ++i)
-    {
-        if (i == 0)
-            a0_[0] = (vp_[1] - vp_[0]) / step;
-        else if (i == kNumPoints - 1)
-            a0_[static_cast<std::size_t>(i)] = (vp_[static_cast<std::size_t>(i)] - vp_[static_cast<std::size_t>(i - 1)]) / step;
-        else
-            a0_[static_cast<std::size_t>(i)] =
-                (vp_[static_cast<std::size_t>(i + 1)] - vp_[static_cast<std::size_t>(i - 1)]) / (2.0 * step);
-    }
+    // Cumulative trapezoid antiderivative P, P(VgkMin)=0
+    p_[0] = 0.0;
+    for (std::size_t i = 1; i < kNumPoints; ++i)
+        p_[i] = p_[i - 1] + 0.5 * (vp_[i] + vp_[i - 1]) * dx;
 
     ready_ = true;
 }
 
-namespace {
-
-[[nodiscard]] double hermiteInterp(double x0, double x1, double y0, double y1, double m0, double m1, double x) noexcept
+double TubeLut::lookupVp(double vgk) const noexcept
 {
-    const double t = (x - x0) / (x1 - x0);
-    const double t2 = t * t;
-    const double t3 = t2 * t;
-    const double h00 = 2.0 * t3 - 3.0 * t2 + 1.0;
-    const double h10 = t3 - 2.0 * t2 + t;
-    const double h01 = -2.0 * t3 + 3.0 * t2;
-    const double h11 = t3 - t2;
-    return h00 * y0 + h10 * (x1 - x0) * m0 + h01 * y1 + h11 * (x1 - x0) * m1;
+    const double span = kVgkMax - kVgkMin;
+    double t = (vgk - kVgkMin) / span;
+    if (t <= 0.0)
+        return vp_.front();
+    if (t >= 1.0)
+        return vp_.back();
+
+    const double pos = t * static_cast<double>(kNumPoints - 1);
+    const auto i0 = static_cast<std::size_t>(pos);
+    const std::size_t i1 = std::min(i0 + 1u, kNumPoints - 1u);
+    const double f = pos - static_cast<double>(i0);
+
+    // Cubic Hermite using neighbouring slopes
+    const auto im = i0 > 0 ? i0 - 1u : 0u;
+    const auto ip = std::min(i1 + 1u, kNumPoints - 1u);
+    const double y0 = vp_[i0];
+    const double y1 = vp_[i1];
+    const double m0 = 0.5 * (vp_[i1] - vp_[im]);
+    const double m1 = 0.5 * (vp_[ip] - vp_[i0]);
+    const double f2 = f * f;
+    const double f3 = f2 * f;
+    return (2.0 * f3 - 3.0 * f2 + 1.0) * y0 + (f3 - 2.0 * f2 + f) * m0
+           + (-2.0 * f3 + 3.0 * f2) * y1 + (f3 - f2) * m1;
 }
 
-template<typename Table>
-[[nodiscard]] double lookupHermite(const Table& y, const Table& m, double vgk) noexcept
+double TubeLut::lookupSlope(double vgk) const noexcept
 {
-    const double step = (TubeLut::kVgkMax - TubeLut::kVgkMin) / static_cast<double>(TubeLut::kNumPoints - 1);
-    const double pos = (vgk - TubeLut::kVgkMin) / step;
-    const int i0 = clamp(static_cast<int>(std::floor(pos)), 0, TubeLut::kNumPoints - 2);
-    const int i1 = i0 + 1;
-    const double x0 = TubeLut::kVgkMin + static_cast<double>(i0) * step;
-    const double x1 = TubeLut::kVgkMin + static_cast<double>(i1) * step;
-    return hermiteInterp(x0, x1, y[static_cast<std::size_t>(i0)], y[static_cast<std::size_t>(i1)],
-                         m[static_cast<std::size_t>(i0)], m[static_cast<std::size_t>(i1)], vgk);
+    const double span = kVgkMax - kVgkMin;
+    const double dx = span / static_cast<double>(kNumPoints - 1);
+    double t = (vgk - kVgkMin) / span;
+    if (t <= 0.0)
+        return (vp_[1] - vp_[0]) / dx;
+    if (t >= 1.0)
+        return (vp_.back() - vp_[kNumPoints - 2]) / dx;
+
+    const double pos = t * static_cast<double>(kNumPoints - 1);
+    const auto i0 = static_cast<std::size_t>(pos);
+    const std::size_t i1 = std::min(i0 + 1u, kNumPoints - 1u);
+    return (vp_[i1] - vp_[i0]) / dx;
 }
 
-} // namespace
-
-double TubeLut::evaluateVp(double vgk) const noexcept
+double TubeLut::lookupP(double vgk) const noexcept
 {
-    if (!ready_)
-        return 0.0;
-    const double v = clamp(vgk, kVgkMin, kVgkMax);
-    return lookupHermite(vp_, a0_, v);
-}
-
-double TubeLut::evaluateA0(double vgk) const noexcept
-{
-    if (!ready_)
-        return -1.0;
-    const double v = clamp(vgk, kVgkMin, kVgkMax);
-    return lookupHermite(a0_, a0_, v);
+    const double span = kVgkMax - kVgkMin;
+    double t = (vgk - kVgkMin) / span;
+    if (t <= 0.0)
+        return p_.front();
+    if (t >= 1.0)
+        return p_.back();
+    const double pos = t * static_cast<double>(kNumPoints - 1);
+    const auto i0 = static_cast<std::size_t>(pos);
+    const std::size_t i1 = std::min(i0 + 1u, kNumPoints - 1u);
+    const double f = pos - static_cast<double>(i0);
+    return p_[i0] + f * (p_[i1] - p_[i0]);
 }
 
 } // namespace wg::dsp

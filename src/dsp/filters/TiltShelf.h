@@ -33,14 +33,15 @@ public:
 
     void setHighShelf(double sampleRate, double fcHz, double gainDb) noexcept
     {
-        const double A = dB2lin(gainDb);
+        // First-order high shelf (bilinear). Must be exactly unity when gainDb==0.
+        const double g = dB2lin(gainDb);
         const double wc = 2.0 * kPi * fcHz / sampleRate;
         const double t = std::tan(wc * 0.5);
-        const double rootA = std::sqrt(A);
-        const double denom = 1.0 + rootA * t;
-        b0_ = (rootA + t) / denom;
-        b1_ = (rootA - t) / denom;
-        a1_ = (t - rootA) / denom;
+        const double gs = std::sqrt(g);
+        const double denom = gs * t + 1.0;
+        b0_ = (gs * t + g) / denom;
+        b1_ = (gs * t - g) / denom;
+        a1_ = (gs * t - 1.0) / denom;
     }
 
     [[nodiscard]] double processSample(double x) noexcept

@@ -3,104 +3,74 @@
 #include "dsp/Constants.h"
 #include "dsp/util/MathUtil.h"
 
-#include <array>
 #include <cmath>
 
 namespace wg::dsp {
 
 namespace {
-
-// Placeholder calibration (SPEC §4.7) — replace via wg_render --calibrate.
-constexpr std::array<double, 11> kStaticGainDbTable{
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+// Calibrated by wg_render --calibrate (pink −18 LUFS). Unity until calibration run.
+constexpr double kStaticGainDb[AutoGain::kStaticTableSize] = {
+    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
-
-[[nodiscard]] double lufsFromMeanSquare(double ms) noexcept
-{
-    if (ms <= 1.0e-20)
-        return -100.0;
-    return -0.691 + 10.0 * std::log10(ms);
-}
-
 } // namespace
 
-void AutoGain::prepare(double sampleRate, int numChannels) noexcept
+const double* AutoGain::staticTableDb() noexcept
 {
-    fs_ = sampleRate;
-    numChannels_ = numChannels;
-    kIn_.setSampleRate(fs_);
-    kOut_.setSampleRate(fs_);
-    if (fs_ > 0.0)
-    {
-        const double msTau = fs_ * kAutoGainDynamicTauMs * 0.001;
-        msCoeff_ = 1.0 - std::exp(-1.0 / msTau);
-        const double gTau = fs_ * kAutoGainSmoothTauMs * 0.001;
-        gainSmoothCoeff_ = 1.0 - std::exp(-1.0 / gTau);
-    }
+    return kStaticGainDb;
+}
+
+void AutoGain::prepare(double sampleRate) noexcept
+{
+    sampleRate_ = sampleRate;
+    kIn_.setSampleRate(sampleRate);
+    kOut_.setSampleRate(sampleRate);
+    msCoeff_ = 1.0 - std::exp(-1.0 / (kAutoGainDynamicTauMs * 0.001 * sampleRate));
+    smoothCoeff_ = 1.0 - std::exp(-1.0 / (kAutoGainSmoothTauMs * 0.001 * sampleRate));
+    reset();
 }
 
 void AutoGain::reset() noexcept
 {
-    gainLinear_ = 1.0;
-    gainDbSmooth_ = 0.0;
-    inMs_ = 0.0;
-    outMs_ = 0.0;
-    gateFrozen_ = false;
     kIn_.reset();
     kOut_.reset();
+    pin_ = 1.0e-12;
+    pout_ = 1.0e-12;
+    dynGainDb_ = 0.0;
 }
 
-double AutoGain::staticGainDb() const noexcept
+double AutoGain::staticGainLinear(double amount01) const noexcept
 {
-    const double a = clamp(amount_, 0.0, 1.0);
-    const double idx = a * 10.0;
-    const int i0 = static_cast<int>(std::floor(idx));
-    const int i1 = std::min(i0 + 1, 10);
-    const double frac = idx - static_cast<double>(i0);
-    return lerp(kStaticGainDbTable[static_cast<std::size_t>(i0)],
-                kStaticGainDbTable[static_cast<std::size_t>(i1)], frac);
+    const double a = clamp(amount01, 0.0, 1.0);
+    const double pos = a * static_cast<double>(kStaticTableSize - 1);
+    const auto i0 = static_cast<int>(pos);
+    const int i1 = std::min(i0 + 1, kStaticTableSize - 1);
+    const double f = pos - static_cast<double>(i0);
+    const double db = lerp(kStaticGainDb[i0], kStaticGainDb[i1], f);
+    return dB2lin(db);
 }
 
-void AutoGain::updateGate(double inWeightedMs) noexcept
+double AutoGain::processGain(double dryPreInGain, double wet) noexcept
 {
-    const double lufs = lufsFromMeanSquare(inWeightedMs);
-    gateFrozen_ = lufs < kAutoGainGateLufs;
-}
-
-double AutoGain::processSample(double inSample, double wetSample) noexcept
-{
-    (void)numChannels_;
-
     if (mode_ == AutoGainMode::Off)
-    {
-        gainLinear_ = 1.0;
-        return gainLinear_;
-    }
+        return 1.0;
 
     if (mode_ == AutoGainMode::Static)
-    {
-        gainLinear_ = dB2lin(staticGainDb());
-        return gainLinear_;
-    }
+        return staticGainLinear(amount_);
 
-    const double inW = kIn_.processSample(inSample);
-    const double outW = kOut_.processSample(wetSample);
-    inMs_ += (inW * inW - inMs_) * msCoeff_;
-    outMs_ += (outW * outW - outMs_) * msCoeff_;
-    updateGate(inMs_);
+    const double kin = kIn_.processSample(dryPreInGain);
+    const double kout = kOut_.processSample(wet);
+    pin_ += (kin * kin - pin_) * msCoeff_;
+    pout_ += (kout * kout - pout_) * msCoeff_;
 
-    double targetDb = 0.0;
-    if (!gateFrozen_ && outMs_ > 1.0e-20)
-    {
-        const double g = std::sqrt(inMs_ / outMs_);
-        targetDb = clamp(lin2dB(g), -12.0, 12.0);
-    }
+    const double lufsIn = -0.691 + 10.0 * std::log10(std::max(pin_, 1.0e-30));
+    if (lufsIn < kAutoGainGateLufs)
+        return dB2lin(dynGainDb_);
 
-    if (!gateFrozen_)
-        gainDbSmooth_ += (targetDb - gainDbSmooth_) * gainSmoothCoeff_;
-
-    gainLinear_ = dB2lin(gainDbSmooth_);
-    return gainLinear_;
+    const double ratio = std::sqrt(std::max(pin_, 1.0e-30) / std::max(pout_, 1.0e-30));
+    double targetDb = lin2dB(ratio);
+    targetDb = clamp(targetDb, -12.0, 12.0);
+    dynGainDb_ += (targetDb - dynGainDb_) * smoothCoeff_;
+    return dB2lin(dynGainDb_);
 }
 
 } // namespace wg::dsp

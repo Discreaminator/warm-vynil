@@ -5,45 +5,42 @@
 
 namespace wg::dsp {
 
-/** Auto-gain Off / Static / Dynamic (SPEC §4.7). */
+/** Static table + dynamic K-weighted auto-gain (SPEC §4.7). */
 class AutoGain
 {
 public:
-    void prepare(double sampleRate, int numChannels) noexcept;
+    static constexpr int kStaticTableSize = 11;
 
+    void prepare(double sampleRate) noexcept;
     void reset() noexcept;
 
     void setMode(AutoGainMode mode) noexcept { mode_ = mode; }
+    void setAmount(double amount01) noexcept { amount_ = amount01; }
 
-    void setAmount(double amount0to1) noexcept { amount_ = amount0to1; }
+    /** Static compensation for current amount (linear gain). */
+    [[nodiscard]] double staticGainLinear(double amount01) const noexcept;
 
-    /** `inSample` is pre-effect input; `wetSample` is processed wet. Returns gain to apply to wet. */
-    [[nodiscard]] double processSample(double inSample, double wetSample) noexcept;
+    /**
+     * Process one sample of wet (and matching pre-InGain dry for dynamic).
+     * Returns gain to apply to wet (linear).
+     */
+    [[nodiscard]] double processGain(double dryPreInGain, double wet) noexcept;
 
-    [[nodiscard]] double currentGainLinear() const noexcept { return gainLinear_; }
+    /** Calibration table accessor (dB), size kStaticTableSize. */
+    [[nodiscard]] static const double* staticTableDb() noexcept;
 
 private:
-    [[nodiscard]] double staticGainDb() const noexcept;
-
-    void updateGate(double inWeightedMs) noexcept;
-
-    double fs_ = 48000.0;
-    int numChannels_ = 2;
+    double sampleRate_ = 48000.0;
     AutoGainMode mode_ = AutoGainMode::Static;
     double amount_ = 0.5;
 
-    double gainLinear_ = 1.0;
-    double gainDbSmooth_ = 0.0;
-
-    double inMs_ = 0.0;
-    double outMs_ = 0.0;
-    double msCoeff_ = 0.0;
-    double gainSmoothCoeff_ = 0.0;
-
-    bool gateFrozen_ = false;
-
     KWeighting kIn_{};
     KWeighting kOut_{};
+    double pin_ = 1.0e-12;
+    double pout_ = 1.0e-12;
+    double dynGainDb_ = 0.0;
+    double msCoeff_ = 0.0;
+    double smoothCoeff_ = 0.0;
 };
 
 } // namespace wg::dsp

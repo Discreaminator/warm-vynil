@@ -48,22 +48,17 @@ private:
     double s2_ = 0.0;
 };
 
-/** Swap numerator/denominator and normalize so the new b0 = 1 (RIAA pre-emphasis from play). */
+/** Exact digital inverse of play biquad (RIAA pre-emphasis). SPEC §4.3: b↔a, /b0. */
 [[nodiscard]] inline BiquadCoeffs invertCoeffs(const BiquadCoeffs& play) noexcept
 {
     BiquadCoeffs inv{};
-    inv.b0 = 1.0;
-    inv.b1 = play.a1;
-    inv.b2 = play.a2;
-    inv.a1 = play.b1;
-    inv.a2 = play.b2;
-    if (std::abs(play.b0) > 1.0e-30)
-    {
-        inv.b1 /= play.b0;
-        inv.b2 /= play.b0;
-        inv.a1 /= play.b0;
-        inv.a2 /= play.b0;
-    }
+    if (std::abs(play.b0) < 1.0e-30)
+        return inv;
+    inv.b0 = 1.0 / play.b0;
+    inv.b1 = play.a1 / play.b0;
+    inv.b2 = play.a2 / play.b0;
+    inv.a1 = play.b1 / play.b0;
+    inv.a2 = play.b2 / play.b0;
     return inv;
 }
 

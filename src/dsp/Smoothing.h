@@ -6,7 +6,7 @@
 
 namespace wg::dsp {
 
-/** Linear ramp toward target in native units (SPEC §8.2). */
+/** Linear ramp toward target in native units (SPEC §8.2). Completes in setTimeMs. */
 class LinearSmoother
 {
 public:
@@ -14,24 +14,47 @@ public:
     {
         current_ = value;
         target_ = value;
+        step_ = 0.0;
+        remaining_ = 0;
     }
 
-    void setTarget(double target) noexcept { target_ = target; }
+    void setTarget(double target) noexcept
+    {
+        target_ = target;
+        if (rampSamples_ <= 1)
+        {
+            current_ = target_;
+            step_ = 0.0;
+            remaining_ = 0;
+            return;
+        }
+        remaining_ = rampSamples_;
+        step_ = (target_ - current_) / static_cast<double>(rampSamples_);
+    }
 
     void setTimeMs(double sampleRate, double timeMs) noexcept
     {
         if (sampleRate <= 0.0 || timeMs <= 0.0)
         {
-            coeff_ = 1.0;
+            rampSamples_ = 1;
             return;
         }
-        const double tauSamples = sampleRate * timeMs * 0.001;
-        coeff_ = 1.0 - std::exp(-1.0 / tauSamples);
+        rampSamples_ = std::max(1, static_cast<int>(std::lround(sampleRate * timeMs * 0.001)));
     }
 
     [[nodiscard]] double processSample() noexcept
     {
-        current_ += (target_ - current_) * coeff_;
+        if (remaining_ > 0)
+        {
+            current_ += step_;
+            --remaining_;
+            if (remaining_ == 0)
+                current_ = target_;
+        }
+        else
+        {
+            current_ = target_;
+        }
         return current_;
     }
 
@@ -47,7 +70,9 @@ public:
 private:
     double current_ = 0.0;
     double target_ = 0.0;
-    double coeff_ = 1.0;
+    double step_ = 0.0;
+    int remaining_ = 0;
+    int rampSamples_ = 1;
 };
 
 /** Gain smoother: targets and state in dB, output is linear gain (SPEC §4.1, §8.2). */

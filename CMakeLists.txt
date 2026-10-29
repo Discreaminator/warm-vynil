@@ -34,6 +34,7 @@ add_subdirectory(extern/clap-juce-extensions EXCLUDE_FROM_ALL)
 add_library(wg_dsp STATIC
     src/dsp/Engine.cpp
     src/dsp/MacroMap.cpp
+    src/dsp/os/Oversampler.cpp
     src/dsp/stages/MonoBass.cpp
     src/dsp/stages/RiaaDesign.cpp
     src/dsp/stages/Riaa.cpp
