@@ -10,6 +10,7 @@ add_executable(wg_tests
     test_edge_cases.cpp
     test_nonlinear_shapes.cpp
     test_oversampler.cpp
+    test_cpu_bench.cpp
 )
 
 target_include_directories(wg_tests PRIVATE
@@ -24,7 +25,7 @@ target_link_libraries(wg_tests PRIVATE
 
 # Own warning set: /WX but silence pocketfft + benign test noise
 if(MSVC)
-    target_compile_options(wg_tests PRIVATE /W4 /permissive- /WX /wd4127 /wd4324 /wd4189 /wd4244)
+    target_compile_options(wg_tests PRIVATE /W4 /permissive- /WX /wd4127 /wd4324 /wd4189 /wd4244 /wd4723)
 else()
     target_compile_options(wg_tests PRIVATE -Wall -Wextra -Wpedantic -Wno-error=unused-parameter)
 endif()

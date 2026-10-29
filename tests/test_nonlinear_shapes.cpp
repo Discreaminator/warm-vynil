@@ -1,9 +1,12 @@
+#include "dsp/Engine.h"
 #include "dsp/stages/Tracing.h"
 #include "dsp/stages/Transformer.h"
 #include "dsp/stages/TubeStage.h"
 #include "dsp/stages/MonoBass.h"
 #include "dsp/stages/Crosstalk.h"
 #include "dsp/util/MathUtil.h"
+#include "util/Metrics.h"
+#include "util/SignalGen.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -60,6 +63,7 @@ TEST_CASE("T12 mono bass and crosstalk", "[t12]")
 TEST_CASE("T13 nonlinear shapes: f(0)=0 and monotonic", "[t13]")
 {
     wg::dsp::Tracing tr;
+    tr.setAdaa(false); // transfer-curve test (ADAA is stateful)
     tr.setTargets(2.0);
     REQUIRE(tr.processSample(0.0) == 0.0);
     double prev = tr.processSample(-1.0);
@@ -89,4 +93,46 @@ TEST_CASE("T13 nonlinear shapes: f(0)=0 and monotonic", "[t13]")
     for (int i = 0; i < 100000; ++i)
         y = xf.processSample(0.0);
     REQUIRE(std::abs(y) < 1e-9);
+}
+
+TEST_CASE("T13 ADAA vs no-ADAA harmonics within 1 dB at 1 kHz", "[t13][adaa][m4]")
+{
+    constexpr double fs = 48000.0;
+    const double f0 = wg::test::coherentFreq(1000.0, fs);
+    const int settle = static_cast<int>(0.5 * fs);
+
+    auto render = [&](bool adaa) {
+        const int n = static_cast<int>(fs * 2);
+        wg::dsp::Engine eng;
+        wg::dsp::EngineParams p{};
+        p.amount = 0.5f;
+        p.autoGain = wg::dsp::AutoGainMode::Off;
+        p.osFactor = 4;
+        p.adaa = adaa;
+        eng.setTargets(p);
+        eng.prepare({ fs, 512, 1 });
+        std::vector<float> buf(static_cast<std::size_t>(n));
+        wg::test::fillSine(buf, fs, f0, -6.0);
+        for (int off = 0; off < n;)
+        {
+            const int bs = std::min(512, n - off);
+            float* c = buf.data() + off;
+            eng.process(&c, 1, bs);
+            off += bs;
+        }
+        return wg::test::magnitudeSpectrum(buf.data() + settle, n - settle);
+    };
+
+    auto magOff = render(false);
+    auto magOn = render(true);
+    for (int h = 2; h <= 5; ++h)
+    {
+        const double a = wg::test::harmonicDb(magOff, f0, h, fs);
+        const double b = wg::test::harmonicDb(magOn, f0, h, fs);
+        INFO("H" << h << " off=" << a << " on=" << b);
+        // Ignore buried harmonics (noise floor).
+        if (a < -80.0 && b < -80.0)
+            continue;
+        REQUIRE(std::abs(a - b) <= 1.0);
+    }
 }

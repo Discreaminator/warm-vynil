@@ -9,14 +9,46 @@
 
 namespace wg::dsp {
 
+namespace {
+constexpr double kStructuralFadeMs = 10.0;
+} // namespace
+
+int Engine::resolveOsChoice() const noexcept
+{
+    if (targets_.offlineHQ && spec_.nonRealtime)
+        return 8;
+    return targets_.osFactor;
+}
+
+bool Engine::resolveAdaa() const noexcept
+{
+    if (targets_.offlineHQ && spec_.nonRealtime)
+        return true;
+    return targets_.adaa;
+}
+
 void Engine::prepare(const Spec& spec) noexcept
 {
     spec_ = spec;
     const int ch = std::max(1, spec.numChannels);
     const int maxBlock = std::max(1, spec.maxBlock);
 
-    oversampler_.prepare(spec.sampleRate, maxBlock, targets_.osFactor, ch);
-    latencySamples_ = oversampler_.latencySamples();
+    preparedOsChoice_ = resolveOsChoice();
+    adaaActive_ = resolveAdaa();
+
+    oversampler_.prepare(spec.sampleRate, maxBlock, preparedOsChoice_, ch);
+    const int osLatency = oversampler_.latencySamples();
+
+    int reportLatency = osLatency;
+    if (targets_.offlineHQ)
+    {
+        // Constant PDC realtime ↔ offline (SPEC §6.4): report max(lat(N), lat(8x)).
+        os::Oversampler probe;
+        probe.prepare(spec.sampleRate, maxBlock, 8, ch);
+        reportLatency = std::max(osLatency, probe.latencySamples());
+    }
+    wetPadSamples_ = std::max(0, reportLatency - osLatency);
+    latencySamples_ = reportLatency;
 
     amountSm_.setTimeMs(spec.sampleRate, kSmoothAmountMs);
     inGainSm_.setTimeMs(spec.sampleRate, kSmoothGainMs);
@@ -24,6 +56,7 @@ void Engine::prepare(const Spec& spec) noexcept
     mixSm_.setTimeMs(spec.sampleRate, kSmoothGainMs);
     wetEnableSm_.setTimeMs(spec.sampleRate, kSmoothBypassMs);
     hostBypassSm_.setTimeMs(spec.sampleRate, kSmoothBypassMs);
+    structuralFadeSm_.setTimeMs(spec.sampleRate, kStructuralFadeMs);
 
     amountSm_.reset(targets_.amount);
     inGainSm_.reset(targets_.inGainDb);
@@ -33,6 +66,9 @@ void Engine::prepare(const Spec& spec) noexcept
     // Snap engine-bypass wet weight to match Amount (avoid T2 tail from 20 ms ramp).
     engineWetActive_ = !(static_cast<double>(targets_.amount) < kEngineBypassOff);
     wetEnableSm_.reset(engineWetActive_ ? 1.0 : 0.0);
+    // Soft-start after OS / topology rebuild (SPEC §6.3 fade-in).
+    structuralFadeSm_.reset(0.0);
+    structuralFadeSm_.setTarget(1.0);
 
     for (int c = 0; c < 2; ++c)
     {
@@ -49,13 +85,17 @@ void Engine::prepare(const Spec& spec) noexcept
         cartridge_[static_cast<std::size_t>(c)].prepare(fsi);
         tube_[static_cast<std::size_t>(c)].prepare(fsi);
         xfmr_[static_cast<std::size_t>(c)].prepare(fsi);
+        tracing_[static_cast<std::size_t>(c)].setAdaa(adaaActive_);
     }
     crosstalk_.prepare(fsi);
     autoGain_.prepare(spec.sampleRate);
     (void)ch;
 
-    dryDelayL_.prepare(static_cast<std::size_t>(std::max(latencySamples_, 1) + 8));
-    dryDelayR_.prepare(static_cast<std::size_t>(std::max(latencySamples_, 1) + 8));
+    const int delayCap = std::max(latencySamples_, 1) + 8;
+    dryDelayL_.prepare(static_cast<std::size_t>(delayCap));
+    dryDelayR_.prepare(static_cast<std::size_t>(delayCap));
+    wetPadL_.prepare(static_cast<std::size_t>(std::max(wetPadSamples_, 1) + 8));
+    wetPadR_.prepare(static_cast<std::size_t>(std::max(wetPadSamples_, 1) + 8));
 
     const int maxOs = maxBlock * std::max(oversampler_.factor(), 1);
     osL_.assign(static_cast<std::size_t>(maxOs), 0.0f);
@@ -65,6 +105,9 @@ void Engine::prepare(const Spec& spec) noexcept
 
     sampleCounter_ = 0;
     reset();
+    // Keep structural fade at 0 after reset wiped smoother state.
+    structuralFadeSm_.reset(0.0);
+    structuralFadeSm_.setTarget(1.0);
     updateSmoothersAndCoeffs();
 }
 
@@ -87,7 +130,17 @@ void Engine::reset() noexcept
     autoGain_.reset();
     dryDelayL_.reset();
     dryDelayR_.reset();
+    wetPadL_.reset();
+    wetPadR_.reset();
     engineWetActive_ = true;
+}
+
+void Engine::setNonRealtime(bool nonRealtime) noexcept
+{
+    if (spec_.nonRealtime == nonRealtime)
+        return;
+    spec_.nonRealtime = nonRealtime;
+    // Topology may change under offlineHQ — caller should re-prepare when needed.
 }
 
 void Engine::setTargets(const EngineParams& params) noexcept
@@ -101,6 +154,9 @@ void Engine::setTargets(const EngineParams& params) noexcept
     mixSm_.setTarget(static_cast<double>(params.mix));
     hostBypassSm_.setTarget(params.bypass ? 1.0 : 0.0);
     autoGain_.setMode(params.autoGain);
+    adaaActive_ = resolveAdaa();
+    for (int c = 0; c < 2; ++c)
+        tracing_[static_cast<std::size_t>(c)].setAdaa(adaaActive_);
 }
 
 void Engine::updateSmoothersAndCoeffs() noexcept
@@ -124,10 +180,13 @@ void Engine::updateSmoothersAndCoeffs() noexcept
     mb.depthM = internal_.m;
     monoBass_.setTargets(mb);
 
+    adaaActive_ = resolveAdaa();
+
     for (int c = 0; c < 2; ++c)
     {
         riaa_[static_cast<std::size_t>(c)].setTargets(internal_.tiltDb, internal_.T4_eff);
         tracing_[static_cast<std::size_t>(c)].setTargets(internal_.s_tr);
+        tracing_[static_cast<std::size_t>(c)].setAdaa(adaaActive_);
         cartridge_[static_cast<std::size_t>(c)].setTargets(internal_.cartFr, internal_.cartQ);
 
         TubeTargets tt{};
@@ -135,6 +194,7 @@ void Engine::updateSmoothersAndCoeffs() noexcept
         tt.tubeBias = static_cast<double>(targets_.tubeBias);
         tt.kDyn = internal_.kDyn;
         tt.model = targets_.tubeModel;
+        tt.adaa = adaaActive_;
         tube_[static_cast<std::size_t>(c)].setTargets(tt);
         xfmr_[static_cast<std::size_t>(c)].setTargets(internal_.xfmrSx, internal_.xfmrFc);
     }
@@ -177,8 +237,6 @@ void Engine::processOsChain(float* leftOs, float* rightOs, int numOs, int numCha
         }
     }
 }
-
-void Engine::processChunk(float* const* /*channels*/, int /*numChannels*/, int /*numSamples*/) noexcept {}
 
 void Engine::process(float* const* channels, int numChannels, int numSamples) noexcept
 {
@@ -246,6 +304,7 @@ void Engine::process(float* const* channels, int numChannels, int numSamples) no
             };
 
             const float delay = static_cast<float>(latencySamples_);
+            const float wetPad = static_cast<float>(wetPadSamples_);
             const int osFactor = oversampler_.factor();
             const int numOs = n * osFactor;
 
@@ -288,8 +347,9 @@ void Engine::process(float* const* channels, int numChannels, int numSamples) no
                 const double wetEn = wetEnableSm_.processSample();
                 const double bypass = hostBypassSm_.processSample();
                 const double outG = outGainSm_.processSample();
+                const double structFade = structuralFadeSm_.processSample();
                 (void)amountSm_.processSample();
-                const double wetMix = clamp(mixW * wetEn, 0.0, 1.0);
+                const double wetMix = clamp(mixW * wetEn * structFade, 0.0, 1.0);
 
                 for (int c = 0; c < numChannels; ++c)
                 {
@@ -297,6 +357,12 @@ void Engine::process(float* const* channels, int numChannels, int numSamples) no
                         continue;
 
                     double wet = dcOut_[c].processSample(static_cast<double>(chPtr[c][i]));
+                    if (wetPadSamples_ > 0)
+                    {
+                        DelayLine& wp = (c == 0) ? wetPadL_ : wetPadR_;
+                        wet = static_cast<double>(wp.processSample(static_cast<float>(wet), wetPad));
+                    }
+
                     const double dryIn = (c == 0) ? static_cast<double>(dryL_[static_cast<std::size_t>(i)])
                                                  : static_cast<double>(dryR_[static_cast<std::size_t>(i)]);
                     DelayLine& dl = (c == 0) ? dryDelayL_ : dryDelayR_;

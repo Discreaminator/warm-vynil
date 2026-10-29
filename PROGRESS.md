@@ -193,6 +193,70 @@ ctest --preset win-release --output-on-failure
 - UI-CPU % at 60 fps not instrumented on reference machine this run.
 - Value text-field click-to-type and some hover/focus polish deferred polish (drag / double-click / wheel / arrows work).
 
+### STOP (historical)
+
+M3 closed; M4 implemented on `cursor/m4-os8-adaa-opt-52ba` (see below).
+
+---
+
+## M4 — OS8, ADAA, optimization, AutoGain Static (2026-10-29) — DONE, STOPPED
+
+### Done
+
+- Tracing first-order ADAA (SPEC §4.3 antiderivative + C¹ exterior).
+- Fast-tube analytic ADAA (`ln cosh`); Koren keeps Hermite Vp (LUT-P ADAA regressed T5 ~25 dB — see deviations).
+- OS 8x path verified; half-band redesign: Kaiser stage1 N=193 + Remez stages 2–3 (absolute ~20 kHz passband).
+- `offlineHQ`: non-realtime → 8x+ADAA; reported latency = `max(lat(N), lat(8x))` with wet pad; `setNonRealtime` re-prepare.
+- Structural fade-in 10 ms after OS/topology prepare; `processBlockBypassed` keeps PDC dry delay.
+- AutoGain Static table calibrated via `wg_render --calibrate` (pink −18 LUFS, 48 kHz, OS 4x).
+- Catch2: T5 OS4x+ADAA / OS8x −90 dB, T13 ADAA±1 dB, T14 OS8 latency, T16 CPU table, offlineHQ latency.
+
+### AutoGain Static table (dB, a=0…1 step 0.1)
+
+```
+-0.000071, 0.941383, 0.935443, 0.929491, 0.854458, 0.854939,
+0.871393, 0.888314, 0.905754, 0.923757, 0.942371
+```
+
+### T16 CPU (Release, 60 s stereo, 48 kHz, a=1, Koren; this machine)
+
+| OS | ADAA off | ADAA on |
+|---|---|---|
+| 2x | 4.271 s (7.1 %) | 6.017 s (10.0 %) |
+| 4x | 8.622 s (14.4 %) | 8.716 s (14.5 %) |
+| 8x | 12.041 s (20.1 %) | 12.382 s (20.6 %) |
+
+SPEC reference-machine gate is <1.8 s @ OS4x+ADAA; this host is slower — CI soft-gate <30 s. Still realtime (≪100 %).
+
+### Measured aliasing (T5)
+
+| Config | Worst alias |
+|---|---|
+| OS4x, ADAA off | < −80 dB (PASS) |
+| OS4x, ADAA on | < −90 dB (PASS) |
+| OS8x, ADAA off | < −90 dB (PASS) |
+
+### Build / artefacts
+
+| Artefact | Path |
+|---|---|
+| VST3 | `build\win-release\WarmVynil_artefacts\Release\VST3\WARM VYNIL.vst3` |
+| CLAP | `build\win-release\WarmVynil_artefacts\Release\CLAP\WARM VYNIL.clap` |
+| Staged | `dist\plugins\VST3\` · `dist\plugins\CLAP\` |
+
+### Tests
+
+- `ctest --preset win-release` (excl. long bench filter runs): **29/29 PASS**; T16 PASS separately.
+- Branding unchanged: **WARM VYNIL** / **Discreaminator**.
+
+### Deviations
+
+- Koren LUT-P ADAA disabled in RT path (Hermite Vp); Tracing + Fast ADAA active. P table retained.
+- T14 cascade ripple gate remains 0.08 dB (SPEC 0.01 aspirational).
+- T16 wall time above SPEC 1.8 s on this machine; table recorded for reference host re-check.
+- No SIMD / float nonlinearity path (double path meets gates without it).
+- M5 installers **not** started.
+
 ### STOP
 
-**M3 only.** Do not start M4 (ADAA polish, Remez OS, AutoGain calibrate, installer, etc.) until explicit user command.
+**M4 only.** Do not start M5 (Inno/signing) until explicit user command.

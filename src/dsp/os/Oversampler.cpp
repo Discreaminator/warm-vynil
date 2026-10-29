@@ -64,8 +64,9 @@ void Oversampler::prepare(double sampleRate, int maxBlock, int osFactorChoice, i
         const double N = static_cast<double>(stages_[static_cast<std::size_t>(s)].length);
         latencyExact += (N - 1.0) / static_cast<double>(1 << (s + 1));
     }
-    // Exact group delay in base samples; report nearest int matching impulse peak.
-    latencySamples_ = static_cast<int>(std::lround(latencyExact));
+    // Exact group delay in base samples. Half-sample totals (odd N cascades)
+    // peak at floor(latencyExact); lround would be +1 vs measured impulse.
+    latencySamples_ = static_cast<int>(std::floor(latencyExact + 1.0e-9));
 
     const int maxHigh = maxBlock_ * std::max(factor_, 1) + 64;
     scratch0_.assign(static_cast<std::size_t>(maxHigh), 0.0f);

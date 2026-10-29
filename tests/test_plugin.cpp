@@ -272,6 +272,32 @@ TEST_CASE("T7 plugin block-size independence", "[T7][plugin][blocks]")
         REQUIRE(render(blocks) == ref);
 }
 
+TEST_CASE("M4 offlineHQ keeps reported latency constant", "[m4][offlineHQ][latency]")
+{
+    constexpr double fs = 48000.0;
+    wg::plugin::PluginProcessor proc;
+    setChoice(proc, wg::plugin::param::osFactor, 1); // 4x
+    setBool(proc, wg::plugin::param::offlineHQ, true);
+    setBool(proc, wg::plugin::param::adaa, false);
+    proc.setPlayConfigDetails(2, 2, fs, 512);
+    proc.prepareToPlay(fs, 512);
+
+    const int latRt = proc.getLatencySamples();
+    REQUIRE(proc.getEngine().osFactor() == 4);
+    REQUIRE(latRt == proc.getEngine().latencySamples());
+
+    proc.setNonRealtime(true);
+    const int latOff = proc.getLatencySamples();
+    REQUIRE(proc.getEngine().osFactor() == 8);
+    REQUIRE(proc.getEngine().adaaActive());
+    REQUIRE(latOff == latRt);
+
+    proc.setNonRealtime(false);
+    REQUIRE(proc.getLatencySamples() == latRt);
+    REQUIRE(proc.getEngine().osFactor() == 4);
+    proc.releaseResources();
+}
+
 TEST_CASE("T6 plugin automation smoothness", "[T6][plugin][automation]")
 {
     constexpr double fs = 48000.0;

@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <vector>
 
-TEST_CASE("T5 aliasing OS4x no ADAA M1 gate -80 dB", "[T5][alias]")
+namespace {
+
+double worstAlias(bool adaa, int osFactor, double gateDb)
 {
     constexpr double fs = 48000.0;
     const double tones[] = { 10000, 12000, 14000, 16000, 18000, 20000 };
@@ -21,8 +23,8 @@ TEST_CASE("T5 aliasing OS4x no ADAA M1 gate -80 dB", "[T5][alias]")
         wg::dsp::EngineParams p{};
         p.amount = 1.0f;
         p.autoGain = wg::dsp::AutoGainMode::Off;
-        p.osFactor = 4;
-        p.adaa = false;
+        p.osFactor = osFactor;
+        p.adaa = adaa;
         eng.setTargets(p);
         eng.prepare(spec);
 
@@ -42,7 +44,25 @@ TEST_CASE("T5 aliasing OS4x no ADAA M1 gate -80 dB", "[T5][alias]")
         INFO("f=" << f0 << " aliasDb=" << alias);
         worst = std::max(worst, alias);
     }
-    INFO("worstAliasDb=" << worst);
-    // M1 DoD: SPEC §12 / milestone — 4x without ADAA < -80 dB.
-    REQUIRE(worst < -80.0);
+    INFO("worstAliasDb=" << worst << " gate=" << gateDb);
+    return worst;
+}
+
+} // namespace
+
+TEST_CASE("T5 aliasing OS4x no ADAA < -80 dB", "[T5][alias]")
+{
+    REQUIRE(worstAlias(false, 4, -80.0) < -80.0);
+}
+
+TEST_CASE("T5 aliasing OS4x+ADAA < -90 dB", "[T5][alias][adaa][m4]")
+{
+    const double worst = worstAlias(true, 4, -90.0);
+    INFO("OS4x+ADAA worstAliasDb=" << worst);
+    REQUIRE(worst < -90.0);
+}
+
+TEST_CASE("T5 aliasing OS8x no ADAA < -90 dB", "[T5][alias][os8][m4]")
+{
+    REQUIRE(worstAlias(false, 8, -90.0) < -90.0);
 }

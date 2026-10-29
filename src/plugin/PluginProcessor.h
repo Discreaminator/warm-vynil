@@ -23,6 +23,8 @@ public:
     void releaseResources() override;
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlockBypassed(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void setNonRealtime(bool isNonRealtime) noexcept override;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
@@ -54,6 +56,7 @@ public:
 private:
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     void applyEngineTargets(bool allowStructuralPrepare);
+    void prepareEngine(const wg::dsp::EngineParams& targets);
 
     juce::AudioProcessorValueTreeState apvts_;
     ParamBridge bridge_;
@@ -63,6 +66,7 @@ private:
 
     double preparedSampleRate_ = 0.0;
     int preparedMaxBlock_ = 0;
+    bool hostNonRealtime_ = false;
     std::atomic<bool> structuralPending_{ false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginProcessor)

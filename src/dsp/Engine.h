@@ -28,9 +28,11 @@ struct Spec
     double sampleRate = 48000.0;
     int maxBlock = 512;
     int numChannels = 2;
+    /** Host non-realtime (offline bounce). Combined with offlineHQ → 8x+ADAA. */
+    bool nonRealtime = false;
 };
 
-/** Full offline DSP chain (SPEC §3–§6). M1. */
+/** Full DSP chain (SPEC §3–§6). M4: ADAA, OS8, offlineHQ constant latency. */
 class Engine
 {
 public:
@@ -38,12 +40,17 @@ public:
     void reset() noexcept;
     void setTargets(const EngineParams& params) noexcept;
 
+    /** Notify realtime ↔ offline transitions without a full structural prepare. */
+    void setNonRealtime(bool nonRealtime) noexcept;
+
     /** In-place process. channels[c][n], numChannels = 1 or 2. */
     void process(float* const* channels, int numChannels, int numSamples) noexcept;
 
     [[nodiscard]] int latencySamples() const noexcept { return latencySamples_; }
     [[nodiscard]] const Spec& spec() const noexcept { return spec_; }
     [[nodiscard]] int osFactor() const noexcept { return oversampler_.factor(); }
+    [[nodiscard]] int preparedOsChoice() const noexcept { return preparedOsChoice_; }
+    [[nodiscard]] bool adaaActive() const noexcept { return adaaActive_; }
     [[nodiscard]] double internalRate() const noexcept { return oversampler_.internalRate(); }
 
     /** Expose stages for isolated tests. */
@@ -54,12 +61,16 @@ public:
 
 private:
     void updateSmoothersAndCoeffs() noexcept;
-    void processChunk(float* const* channels, int numChannels, int numSamples) noexcept;
     void processOsChain(float* leftOs, float* rightOs, int numOs, int numChannels) noexcept;
+    [[nodiscard]] int resolveOsChoice() const noexcept;
+    [[nodiscard]] bool resolveAdaa() const noexcept;
 
     Spec spec_{};
     EngineParams targets_{};
     int latencySamples_ = 0;
+    int wetPadSamples_ = 0;
+    int preparedOsChoice_ = 4;
+    bool adaaActive_ = true;
     std::uint64_t sampleCounter_ = 0;
 
     LinearSmoother amountSm_{};
@@ -68,6 +79,7 @@ private:
     LinearSmoother mixSm_{};
     LinearSmoother wetEnableSm_{}; // engine-bypass wet weight
     LinearSmoother hostBypassSm_{};
+    LinearSmoother structuralFadeSm_{}; // 10 ms fade after OS/topology prepare
 
     DcBlocker<double> dcIn_[2]{};
     DcBlocker<double> dcOut_[2]{};
@@ -85,6 +97,8 @@ private:
 
     DelayLine dryDelayL_{};
     DelayLine dryDelayR_{};
+    DelayLine wetPadL_{};
+    DelayLine wetPadR_{};
 
     std::vector<float> osL_{};
     std::vector<float> osR_{};

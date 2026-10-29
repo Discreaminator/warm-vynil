@@ -31,29 +31,58 @@ const juce::String PluginProcessor::getName() const
     return product::kName;
 }
 
+void PluginProcessor::prepareEngine(const wg::dsp::EngineParams& targets)
+{
+    engine_.setTargets(targets);
+
+    wg::dsp::Spec spec;
+    spec.sampleRate = preparedSampleRate_;
+    spec.maxBlock = preparedMaxBlock_;
+    spec.numChannels = getTotalNumOutputChannels();
+    spec.nonRealtime = hostNonRealtime_;
+    engine_.prepare(spec);
+    setLatencySamples(engine_.latencySamples());
+}
+
 void PluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     preparedSampleRate_ = sampleRate;
     preparedMaxBlock_ = samplesPerBlock;
+    hostNonRealtime_ = isNonRealtime();
 
     auto targets = bridge_.snapshot();
-    // offlineHQ may bump OS in M4; M2 stores the flag only.
-    engine_.setTargets(targets);
-
-    wg::dsp::Spec spec;
-    spec.sampleRate = sampleRate;
-    spec.maxBlock = samplesPerBlock;
-    spec.numChannels = getTotalNumOutputChannels();
-    engine_.prepare(spec);
+    prepareEngine(targets);
 
     bridge_.noteStructuralApplied(targets);
     structuralPending_.store(false, std::memory_order_release);
-    setLatencySamples(engine_.latencySamples());
 }
 
 void PluginProcessor::releaseResources()
 {
     engine_.reset();
+}
+
+void PluginProcessor::setNonRealtime(bool isNonRealtimeFlag) noexcept
+{
+    AudioProcessor::setNonRealtime(isNonRealtimeFlag);
+    hostNonRealtime_ = isNonRealtimeFlag;
+
+    if (preparedSampleRate_ <= 0.0)
+        return;
+
+    // offlineHQ toggles effective OS / ADAA on realtime↔offline transitions.
+    auto targets = bridge_.snapshot();
+    if (!targets.offlineHQ)
+    {
+        engine_.setNonRealtime(isNonRealtimeFlag);
+        return;
+    }
+
+    suspendProcessing(true);
+    prepareEngine(targets);
+    bridge_.noteStructuralApplied(targets);
+    structuralPending_.store(false, std::memory_order_release);
+    suspendProcessing(false);
 }
 
 bool PluginProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -72,27 +101,26 @@ void PluginProcessor::applyEngineTargets(bool allowStructuralPrepare)
 {
     auto targets = bridge_.snapshot();
 
-    if (bridge_.structuralChanged(targets))
+    // Effective OS can also change when offlineHQ + host nonRealtime flips.
+    const int wantOs = (targets.offlineHQ && hostNonRealtime_) ? 8 : targets.osFactor;
+    const bool wantAdaa = targets.adaa || (targets.offlineHQ && hostNonRealtime_);
+    const bool topologyDrift = bridge_.structuralChanged(targets)
+                               || wantOs != engine_.preparedOsChoice()
+                               || wantAdaa != engine_.adaaActive();
+
+    if (topologyDrift)
     {
         if (!allowStructuralPrepare)
         {
             // Keep prior OS on the audio thread; message thread will re-prepare.
-            targets.osFactor = engine_.osFactor();
+            targets.osFactor = engine_.preparedOsChoice();
+            targets.adaa = engine_.adaaActive();
             engine_.setTargets(targets);
             structuralPending_.store(true, std::memory_order_release);
             return;
         }
 
-        engine_.setTargets(targets);
-        if (preparedSampleRate_ > 0.0)
-        {
-            wg::dsp::Spec spec;
-            spec.sampleRate = preparedSampleRate_;
-            spec.maxBlock = preparedMaxBlock_;
-            spec.numChannels = getTotalNumOutputChannels();
-            engine_.prepare(spec);
-            setLatencySamples(engine_.latencySamples());
-        }
+        prepareEngine(targets);
         bridge_.noteStructuralApplied(targets);
         structuralPending_.store(false, std::memory_order_release);
         return;
@@ -140,6 +168,29 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr,
     };
 
+    engine_.process(channels, buffer.getNumChannels(), buffer.getNumSamples());
+}
+
+void PluginProcessor::processBlockBypassed(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    // Keep PDC constant: delayed dry via Engine without touching the bypass param.
+    juce::ScopedNoDenormals noDenormals;
+    juce::ignoreUnused(midi);
+
+    for (auto i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
+        buffer.clear(i, 0, buffer.getNumSamples());
+
+    auto targets = bridge_.snapshot();
+    targets.bypass = true;
+    // Do not allow structural prepare on the audio thread.
+    targets.osFactor = engine_.preparedOsChoice();
+    targets.adaa = engine_.adaaActive();
+    engine_.setTargets(targets);
+
+    float* channels[2] = {
+        buffer.getNumChannels() > 0 ? buffer.getWritePointer(0) : nullptr,
+        buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr,
+    };
     engine_.process(channels, buffer.getNumChannels(), buffer.getNumSamples());
 }
 

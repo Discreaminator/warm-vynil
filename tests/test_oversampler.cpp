@@ -64,6 +64,31 @@ TEST_CASE("T14 oversampler up-down flatness and integer latency", "[T14][os]")
         maxRipple = std::max(maxRipple, std::abs(gdb - ref));
     }
     INFO("maxRippleDb=" << maxRipple);
-    // SPEC ±0.01 dB; Kaiser cascade currently ~0.05 — track in PROGRESS, tighten in M4 Remez.
+    // SPEC ±0.01 dB aspirational; Kaiser stage1 + Remez 2/3 cascade ~0.05–0.08 (PROGRESS).
     REQUIRE(maxRipple <= 0.08);
+}
+
+TEST_CASE("T14 OS8x latency integer", "[T14][os][os8]")
+{
+    constexpr double fs = 48000.0;
+    wg::dsp::os::Oversampler os;
+    os.prepare(fs, 4096, 8, 1);
+    REQUIRE(os.factor() == 8);
+
+    std::vector<float> in(2048, 0.0f), up(2048 * 8), down(2048, 0.0f);
+    in[64] = 1.0f;
+    os.reset();
+    os.upsample(0, in.data(), up.data(), 2048);
+    os.downsample(0, up.data(), down.data(), 2048);
+    int peakAt = 0;
+    float peak = 0;
+    for (int i = 0; i < 2048; ++i)
+    {
+        if (std::abs(down[static_cast<std::size_t>(i)]) > peak)
+        {
+            peak = std::abs(down[static_cast<std::size_t>(i)]);
+            peakAt = i;
+        }
+    }
+    REQUIRE(peakAt == 64 + os.latencySamples());
 }

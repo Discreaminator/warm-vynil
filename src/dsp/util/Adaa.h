@@ -7,7 +7,7 @@
 namespace wg::dsp {
 
 /**
- * First-order ADAA helper (SPEC §6.2, M4). M1 stub — optional use in tracing/tube paths.
+ * First-order ADAA helper (SPEC §6.2, M4).
  * F is the antiderivative of f; when |du| is tiny, falls back to f at the midpoint.
  */
 template<typename F, typename Antiderivative>
@@ -17,7 +17,17 @@ template<typename F, typename Antiderivative>
     const double du = u - uPrev;
     if (std::abs(du) < deltaEps)
         return f(0.5 * (u + uPrev));
-    return (Fint(u) - Fint(uPrev)) / du;
+
+    const double num = Fint(u) - Fint(uPrev);
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4723) // guarded |du| >= eps above
+#endif
+    const double y = num / du;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    return y;
 }
 
 /** Stateful first-order ADAA processor (no heap). */

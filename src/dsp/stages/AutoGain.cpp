@@ -8,9 +8,10 @@
 namespace wg::dsp {
 
 namespace {
-// Calibrated by wg_render --calibrate (pink −18 LUFS). Unity until calibration run.
+// Calibrated by wg_render --calibrate (pink −18 LUFS, 48 kHz, OS 4x, 2026-10-29 M4).
 constexpr double kStaticGainDb[AutoGain::kStaticTableSize] = {
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    -0.000071, 0.941383, 0.935443, 0.929491, 0.854458, 0.854939,
+    0.871393, 0.888314, 0.905754, 0.923757, 0.942371
 };
 } // namespace
 

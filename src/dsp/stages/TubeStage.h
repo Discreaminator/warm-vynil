@@ -11,10 +11,10 @@ struct TubeTargets
     double tubeBias = 0.0; // −1…+1 user
     double kDyn = 0.0;
     TubeModel model = TubeModel::Koren;
-    bool adaa = false; // ignored in M1 processing path
+    bool adaa = true;
 };
 
-/** 12AX7 stage: Koren LUT (default) or Fast tanh (SPEC §4.5). */
+/** 12AX7 stage: Koren LUT (default) or Fast tanh (SPEC §4.5), ADAA optional (M4). */
 class TubeStage
 {
 public:
@@ -33,6 +33,8 @@ private:
     [[nodiscard]] double processKoren(double x) noexcept;
     [[nodiscard]] double processFast(double x) noexcept;
 
+    [[nodiscard]] static double lnCosh(double v) noexcept;
+
     double fsi_ = 48000.0;
     TubeTargets targets_{};
     TubeLut lut_{};
@@ -42,6 +44,12 @@ private:
     double vb_ = -1.5;
     double a0_ = 1.0;
     double driveLin_ = 1.0;
+
+    // ADAA state
+    double vgPrev_ = -1.5;
+    double xPrev_ = 0.0;
+    bool hasVgPrev_ = false;
+    bool hasXPrev_ = false;
 };
 
 } // namespace wg::dsp
