@@ -8,9 +8,14 @@
 namespace wg::plugin {
 namespace {
 
+juce::String u8(const char* utf8)
+{
+    return juce::String(juce::CharPointer_UTF8(utf8));
+}
+
 struct FactoryPreset
 {
-    const char* name;
+    const char* nameUtf8; // UTF-8 bytes; construct via CharPointer_UTF8 (not String(const char*))
     float amount;
     float outGain;
     int autoGain;
@@ -34,17 +39,19 @@ struct FactoryPreset
 // SPEC §9.3 — excludes osFactor / offlineHQ / uiScale.
 constexpr FactoryPreset kFactory[] = {
     // По умолчанию
-    { "По умолчанию", 50.0f, 0.0f, 1, 0.0f, 100.0f, 150.0f, 100.0f, 100.0f, 0.5f, true, 14000.0f, 1.2f, -30.0f,
-      100.0f, 0.0f, 0, 40.0f, 20000.0f },
+    { "\xd0\x9f\xd0\xbe\x20\xd1\x83\xd0\xbc\xd0\xbe\xd0\xbb\xd1\x87\xd0\xb0\xd0\xbd\xd0\xb8\xd1\x8e", 50.0f, 0.0f, 1, 0.0f,
+      100.0f, 150.0f, 100.0f, 100.0f, 0.5f, true, 14000.0f, 1.2f, -30.0f, 100.0f, 0.0f, 0, 40.0f, 20000.0f },
     // Лёгкий тёплый
-    { "Лёгкий тёплый", 30.0f, 0.0f, 1, 0.0f, 100.0f, 150.0f, 100.0f, 100.0f, 0.3f, true, 14000.0f, 1.2f, -35.0f,
-      80.0f, 0.0f, 0, 40.0f, 20000.0f },
+    { "\xd0\x9b\xd1\x91\xd0\xb3\xd0\xba\xd0\xb8\xd0\xb9\x20\xd1\x82\xd1\x91\xd0\xbf\xd0\xbb\xd1\x8b\xd0\xb9", 30.0f, 0.0f, 1,
+      0.0f, 100.0f, 150.0f, 100.0f, 100.0f, 0.3f, true, 14000.0f, 1.2f, -35.0f, 80.0f, 0.0f, 0, 40.0f, 20000.0f },
     // Классический винил
-    { "Классический винил", 55.0f, 0.0f, 1, 0.0f, 100.0f, 150.0f, 100.0f, 100.0f, 0.5f, true, 14000.0f, 1.4f, -28.0f,
-      100.0f, 0.0f, 0, 40.0f, 20000.0f },
+    { "\xd0\x9a\xd0\xbb\xd0\xb0\xd1\x81\xd1\x81\xd0\xb8\xd1\x87\xd0\xb5\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9\x20\xd0\xb2\xd0\xb8\xd0\xbd\xd0\xb8\xd0\xbb",
+      55.0f, 0.0f, 1, 0.0f, 100.0f, 150.0f, 100.0f, 100.0f, 0.5f, true, 14000.0f, 1.4f, -28.0f, 100.0f, 0.0f, 0, 40.0f,
+      20000.0f },
     // Глубокий ламповый
-    { "Глубокий ламповый", 80.0f, 0.0f, 1, 0.0f, 100.0f, 150.0f, 100.0f, 90.0f, 0.5f, true, 14000.0f, 1.2f, -30.0f,
-      150.0f, 0.3f, 0, 70.0f, 18500.0f },
+    { "\xd0\x93\xd0\xbb\xd1\x83\xd0\xb1\xd0\xbe\xd0\xba\xd0\xb8\xd0\xb9\x20\xd0\xbb\xd0\xb0\xd0\xbc\xd0\xbf\xd0\xbe\xd0\xb2\xd1\x8b\xd0\xb9",
+      80.0f, 0.0f, 1, 0.0f, 100.0f, 150.0f, 100.0f, 90.0f, 0.5f, true, 14000.0f, 1.2f, -30.0f, 150.0f, 0.3f, 0, 70.0f,
+      18500.0f },
 };
 
 constexpr int kNumFactory = static_cast<int>(std::size(kFactory));
@@ -53,6 +60,7 @@ constexpr int kNumFactory = static_cast<int>(std::size(kFactory));
 
 PresetManager::PresetManager(juce::AudioProcessorValueTreeState& apvts)
     : apvts_(apvts)
+    , lastPresetName_(u8(kFactory[0].nameUtf8))
 {
 }
 
@@ -64,7 +72,7 @@ int PresetManager::getNumPrograms() const noexcept
 juce::String PresetManager::getProgramName(int index) const
 {
     if (juce::isPositiveAndBelow(index, kNumFactory))
-        return kFactory[static_cast<std::size_t>(index)].name;
+        return u8(kFactory[static_cast<std::size_t>(index)].nameUtf8);
     return {};
 }
 
@@ -120,7 +128,7 @@ void PresetManager::setCurrentProgram(int index)
         return;
     currentProgram_ = index;
     applyFactoryPreset(index);
-    lastPresetName_ = kFactory[static_cast<std::size_t>(index)].name;
+    lastPresetName_ = u8(kFactory[static_cast<std::size_t>(index)].nameUtf8);
 }
 
 juce::File PresetManager::getUserPresetsDirectory()

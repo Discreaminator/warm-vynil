@@ -32,7 +32,7 @@ public:
 private:
     juce::AudioProcessorValueTreeState& apvts_;
     int currentProgram_ = 0;
-    juce::String lastPresetName_{ "По умолчанию" };
+    juce::String lastPresetName_;
 
     void setParam(const char* id, float value);
     void setChoice(const char* id, int index);

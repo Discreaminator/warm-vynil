@@ -259,6 +259,40 @@ inline const juce::String& scaleMenu()
     return s;
 }
 
+inline const juce::String& presetDefault()
+{
+    static const juce::String s{
+        juce::CharPointer_UTF8("\xd0\x9f\xd0\xbe\x20\xd1\x83\xd0\xbc\xd0\xbe\xd0\xbb\xd1\x87\xd0\xb0\xd0\xbd\xd0\xb8\xd1\x8e")
+    };
+    return s;
+}
+
+inline const juce::String& presetLightWarm()
+{
+    static const juce::String s{
+        juce::CharPointer_UTF8("\xd0\x9b\xd1\x91\xd0\xb3\xd0\xba\xd0\xb8\xd0\xb9\x20\xd1\x82\xd1\x91\xd0\xbf\xd0\xbb\xd1\x8b\xd0\xb9")
+    };
+    return s;
+}
+
+inline const juce::String& presetClassicVinyl()
+{
+    static const juce::String s{
+        juce::CharPointer_UTF8(
+            "\xd0\x9a\xd0\xbb\xd0\xb0\xd1\x81\xd1\x81\xd0\xb8\xd1\x87\xd0\xb5\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9\x20\xd0\xb2\xd0\xb8\xd0\xbd\xd0\xb8\xd0\xbb")
+    };
+    return s;
+}
+
+inline const juce::String& presetDeepTube()
+{
+    static const juce::String s{
+        juce::CharPointer_UTF8(
+            "\xd0\x93\xd0\xbb\xd1\x83\xd0\xb1\xd0\xbe\xd0\xba\xd0\xb8\xd0\xb9\x20\xd0\xbb\xd0\xb0\xd0\xbc\xd0\xbf\xd0\xbe\xd0\xb2\xd1\x8b\xd0\xb9")
+    };
+    return s;
+}
+
 inline juce::String formatDb(float db)
 {
     const juce::String minus{ juce::CharPointer_UTF8("\xe2\x88\x92") }; // U+2212

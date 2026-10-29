@@ -100,7 +100,9 @@ TEST_CASE("T15 state get/set/get and factory presets", "[T15][plugin][state]")
 
     REQUIRE(proc.getNumPrograms() == 4);
     proc.setCurrentProgram(2); // Классический винил
-    REQUIRE(proc.getProgramName(2) == juce::String("Классический винил"));
+    REQUIRE(proc.getProgramName(2)
+            == juce::String(juce::CharPointer_UTF8(
+                "\xd0\x9a\xd0\xbb\xd0\xb0\xd1\x81\xd1\x81\xd0\xb8\xd1\x87\xd0\xb5\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9\x20\xd0\xb2\xd0\xb8\xd0\xbd\xd0\xb8\xd0\xbb")));
     REQUIRE(near(proc.getAPVTS().getRawParameterValue(wg::plugin::param::amount)->load(), 55.0f));
     REQUIRE(near(proc.getAPVTS().getRawParameterValue(wg::plugin::param::cartQ)->load(), 1.4f));
 
