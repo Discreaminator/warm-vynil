@@ -43,6 +43,19 @@
         "WG_BUILD_STANDALONE": "OFF",
         "WG_COPY_PLUGIN_AFTER_BUILD": "OFF"
       }
+    },
+    {
+      "name": "pack-win",
+      "displayName": "Windows packaging (VST3+CLAP+Standalone)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/pack-win",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "WG_BUILD_TESTS": "ON",
+        "WG_BUILD_STANDALONE": "ON",
+        "WG_COPY_PLUGIN_AFTER_BUILD": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -60,6 +73,11 @@
       "name": "ci",
       "configurePreset": "ci",
       "configuration": "Release"
+    },
+    {
+      "name": "pack-win",
+      "configurePreset": "pack-win",
+      "configuration": "Release"
     }
   ],
   "testPresets": [
@@ -74,6 +92,14 @@
     {
       "name": "ci",
       "configurePreset": "ci",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "pack-win",
+      "configurePreset": "pack-win",
       "configuration": "Release",
       "output": {
         "outputOnFailure": true

@@ -6,11 +6,12 @@ Implemented against `SPEC.md` (Warm Groove ТЗ). Product: **WARM VYNIL** · Com
 
 | | |
 |---|---|
-| Formats (M0) | **VST3** + **CLAP** (Windows) |
+| Formats | **VST3** + **CLAP** (+ **Standalone** in pack builds) on Windows |
 | License | **AGPL-3.0** — see `LICENSE` + `NOTICE` |
 | Copyright | Copyright (C) 2026 Discreaminator |
 | Codes | manufacturer `Dscr`, plugin `WVnl` |
 | Bundle / CLAP ID | `com.discreaminator.warmvynil` |
+| Installer | Inno Setup — see [docs/INSTALL.md](docs/INSTALL.md) |
 
 ## Requirements (Windows)
 
@@ -51,6 +52,18 @@ Add folder `dist\plugins\VST3` (and `dist\plugins\CLAP`), then **Re-scan**. Inse
 .\build\win-release\Release\wg_render.exe --signal sine --freq 1000 --level -6 --sr 48000 --seconds 1 --out sine.wav
 ```
 
+## Windows installer (M5)
+
+```powershell
+cmake --preset pack-win
+cmake --build --preset pack-win --config Release
+powershell -ExecutionPolicy Bypass -File .\installer\windows\package.ps1
+```
+
+Produces `dist\installer\WarmVynil-Setup-0.1.0.exe`. Signing runs when cert env vars are set; otherwise the build is **unsigned** ([docs/SIGNING.md](docs/SIGNING.md)). User install notes: [docs/INSTALL.md](docs/INSTALL.md).
+
+Tagged releases (`v*`) use `.github/workflows/release.yml`.
+
 ## Milestone status
 
-See [PROGRESS.md](PROGRESS.md). **M0** = skeleton / passthrough. DSP starts at M1.
+See [PROGRESS.md](PROGRESS.md). **M5** = Windows packaging / Inno installer (macOS deferred).

@@ -255,8 +255,56 @@ SPEC reference-machine gate is <1.8 s @ OS4x+ADAA; this host is slower — CI so
 - T14 cascade ripple gate remains 0.08 dB (SPEC 0.01 aspirational).
 - T16 wall time above SPEC 1.8 s on this machine; table recorded for reference host re-check.
 - No SIMD / float nonlinearity path (double path meets gates without it).
-- M5 installers **not** started.
+- M5 installers were deferred here; implemented on `cursor/m5-windows-packaging-d50b` (below).
+
+---
+
+## M5 — Windows packaging / installer / signing (2026-10-29) — DONE, STOPPED
+
+### Done
+
+- Inno Setup script `installer/windows/WarmGroove.iss` (SPEC §12 paths).
+- `installer/windows/package.ps1` stages VST3/CLAP/(Standalone) → builds Setup.exe + SHA256.
+- `installer/windows/sign.ps1` Authenticode / Azure Trusted Signing when credentials exist; **SKIPPED** without paid cert.
+- User docs: `docs/INSTALL.md`, `docs/SIGNING.md`.
+- CMake preset `pack-win` (`WG_BUILD_STANDALONE=ON`).
+- Release workflow `.github/workflows/release.yml` on tag `v*` (optional PFX secrets).
+- macOS packaging deferred (`installer/macos/README.md`) — Windows-first.
+
+### Install paths (Inno)
+
+| Component | Destination |
+|---|---|
+| VST3 | `C:\Program Files\Common Files\VST3\WARM VYNIL.vst3` |
+| CLAP | `C:\Program Files\Common Files\CLAP\WARM VYNIL.clap` |
+| Standalone | `C:\Program Files\Discreaminator\WARM VYNIL\` |
+
+### Signing
+
+**Skipped** — no OV/EV / Azure Trusted Signing credentials. SmartScreen “unknown publisher” documented in `docs/INSTALL.md` / `docs/SIGNING.md`. Wire secrets `WG_SIGN_PFX_BASE64` + `WG_SIGN_PFX_PASSWORD` (or thumbprint / Azure) to enable.
+
+### Build / artefacts
+
+```powershell
+cmake --preset pack-win
+cmake --build --preset pack-win --config Release
+powershell -ExecutionPolicy Bypass -File .\installer\windows\package.ps1
+```
+
+| Artefact | Path |
+|---|---|
+| Installer | `dist\installer\WarmVynil-Setup-0.1.0.exe` (~6.0 MB) |
+| Checksum | `dist\installer\WarmVynil-Setup-0.1.0.exe.sha256` |
+| SHA256 | `2BF94A7CB69AEC95586822E8E2829995DCE0B6E00A6E5919BF1CE357DCDA89A8` |
+| Staged plugins | `dist\plugins\…` |
+| Authenticode | **NotSigned** (all payloads + Setup) |
+
+### Deviations
+
+- Authenticode not applied (no paid cert) — DoD SmartScreen path documented.
+- macOS pkg/notarization not built (Windows-only scope for this milestone).
+- No DSP changes.
 
 ### STOP
 
-**M4 only.** Do not start M5 (Inno/signing) until explicit user command.
+**M5 only.** No further milestones.
